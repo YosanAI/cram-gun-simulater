@@ -61,6 +61,36 @@ body {
   stroke: none;
 }
 
+.scene-controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: min(280px, calc(100vw - 24px));
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  z-index: 3;
+  border-radius: 6px;
+  box-shadow: 0 8px 28px #0006;
+}
+
+.scene-controls-status {
+  display: block;
+  padding: 9px 12px;
+  color: #a6dbbe;
+  background: #101b24;
+  font: 11px system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.scene-controls-status.controls-error {
+  color: #ff9e8f;
+}
+
+.scene-controls .controls-disabled {
+  opacity: .4;
+  pointer-events: none;
+}
+
 .script-panel {
   --panel-inset: 20px;
   --panel-right-inset: 100px;
@@ -275,6 +305,12 @@ body {
 }
 
 @media (max-width: 600px) {
+  .scene-controls {
+    top: 12px;
+    right: 12px;
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(350px, 48dvh)) - 40px));
+  }
+
   .script-panel {
     --panel-inset: 12px;
     --panel-right-inset: 12px;

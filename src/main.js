@@ -5,6 +5,7 @@ import { createEnvironment } from './environment.js';
 import { createFiringEffects } from './effects.js';
 import { MOTION } from './motion.js';
 import { createCodeEditor } from './code-editor.js';
+import { createDroneSwarm } from './drones.js';
 import {
   setAzimuth, setAltitude, getCurrentAzimuth, getCurrentAltitude, fire,
   advanceMotion, getSceneState, stopFiring,
@@ -27,7 +28,7 @@ async function start() {
   const compact = () => window.matchMedia('(max-width: 900px)').matches;
   let disposed = false;
   let frameId;
-  let debugGui;
+  let sceneGui;
   let codeEditor;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -46,7 +47,7 @@ async function start() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.065;
   controls.minDistance = 1.9;
-  controls.maxDistance = 24;
+  controls.maxDistance = 240;
   controls.maxPolarAngle = Math.PI * 0.485;
   controls.minPolarAngle = 0.06;
   controls.panSpeed = 0.6;
@@ -60,6 +61,7 @@ async function start() {
   scene.add(model.root);
   model.elevation.rotation.x = -getCurrentAltitude();
   const effects = createFiringEffects(scene, model.muzzle);
+  const drones = createDroneSwarm(scene);
 
   function stopInput() {
     stopFiring();
@@ -110,9 +112,10 @@ async function start() {
     window.removeEventListener('blur', stopInput);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pagehide', onPageHide);
-    debugGui?.destroy();
+    sceneGui?.destroy();
     codeEditor?.destroy();
     effects.dispose();
+    drones.dispose();
     environment.dispose();
     controls.dispose();
     renderer.dispose();
@@ -142,15 +145,9 @@ async function start() {
     onStop: stopInput,
   });
 
-  if (import.meta.env.DEV) {
-    try {
-      const { createDebugGui } = await import('./debug-gui.js');
-      if (disposed) return;
-      debugGui = createDebugGui();
-    } catch (error) {
-      console.error('Phalanx API testing panel:', error);
-    }
-  }
+  const { createSceneGui } = await import('./scene-gui.js');
+  if (disposed) return;
+  sceneGui = createSceneGui({ drones, includeGunControls: import.meta.env.DEV });
   if (disposed) return;
 
   let lastTime = performance.now();
@@ -169,11 +166,12 @@ async function start() {
     effects.setEnabled(state.firing);
     effects.update(dt, state.elapsed, state.drive);
     environment.update(dt, state.elapsed);
+    drones.update(dt);
 
     controls.update(dt);
     scene.updateMatrixWorld();
     updateCompass();
-    debugGui?.sync();
+    sceneGui.sync();
     renderer.render(scene, camera);
   }
   frameId = requestAnimationFrame(animate);

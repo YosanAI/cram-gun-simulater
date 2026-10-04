@@ -1,6 +1,6 @@
 # Phalanx — Interactive CIWS
 
-A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass and a JavaScript controller editor. A small development-only dat.gui panel also exercises the scene API.
+A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, and configurable incoming drone swarms. A dat.gui panel controls drone spawning in every build and also exercises the gun API during development.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ Available commands:
 | `npm run build` | Create the production website in `dist/` |
 | `npm run preview` | Serve the production build locally after building |
 | `npm run check` | Check the application JavaScript syntax |
-| `npm test` | Verify the angle API, firing lifecycle, and script runner |
+| `npm test` | Verify the angle API, script sandbox, drone flights, impacts, and resource cleanup |
 
 Three.js is installed through npm and pinned to **0.180.0**. Vite resolves its imports during development and bundles it for production. All model geometry, material labels, environment textures, and firing effects are generated locally.
 
@@ -29,7 +29,24 @@ Three.js is installed through npm and pinned to **0.180.0**. Vite resolves its i
 
 Drag the scene to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. The compass follows the camera orientation.
 
-Under `npm run dev`, dat.gui provides only **Azimuth (rad)**, **Altitude (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The production build includes the scene, compass, and code editor; dat.gui remains development-only.
+The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, an additional **Gun API testing** folder provides **Azimuth (rad)**, **Altitude (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
+
+## Drone swarms
+
+Click **Spawn swarm** to queue drones using the current settings:
+
+- **Swarm size:** 1–200 drones per request, with at most 200 in flight or waiting to launch.
+- **Spawn interval (s):** 0.1–10 seconds between launches. The initial drone launches immediately; subsequent drones appear one at a time. Additional requests join the existing schedule and respect the selected spacing, even if the previous request contained only one drone.
+- **Near radius / Far radius:** minimum and maximum distance from the gun's origin, from 5–200 scene units. Equal values place drones at one exact distance. Adjusting either limit keeps the range ordered.
+- **Random directions:** distributes the swarm across the hemisphere above the origin. Turn this off to choose **Azimuth (°)** from 0–360° and **Altitude (°)** from 0–90° above the horizon. Zero azimuth is +Z; 90° is +X, matching the gun coordinates.
+- **Speed (units/s):** constant flight speed from 0.5–20 scene units per second.
+- **Clear drones:** cancels pending launches, removes current flights and effects, and resets the impact counter.
+
+New requests add to the existing launch queue; settings are captured for each swarm. The default is 12 drones, 20–40 units away, with random directions, a speed of 4 units/s, and **0.8 seconds between launches**. The panel reports the number in flight, waiting to launch, and total impacts. Exceeding capacity displays an error without partially queueing a swarm. Scheduling uses the scene's simulation clock, so hidden pages pause launches as well as flight.
+
+The original procedural airframes use a Shahed-inspired delta wing, rounded fuselage, and twin wingtip fins, without propellers. They point along their flight path and fly straight toward the fixed gun origin. When a nose reaches the mount, the drone is removed and a large expanding fireball appears with a white-hot core, turbulent flame lobes, an expanding ground shockwave, sparks, stronger light, and rising smoke. Fireballs last about 1.2 seconds, while smoke fades over 5 seconds. Flights continue independently of the controller script. Airframes use two instanced meshes regardless of swarm size, and impact effects share a pool of at most 32 simultaneous bursts.
+
+The scene system owns the swarm instance and its internal `queueSwarm(options)` command. The controls exercise that system directly; spawning is not exposed on `window.phalanx` or in the controller editor's five-function gun API.
 
 ## Code editor and simulation
 
@@ -131,7 +148,10 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `styles.css` | Scene, compass, and editor layout |
 | `src/main.js` | Existing scene setup, orbit controls, compass, lifecycle, and render loop |
 | `src/api.js` | Radian angle commands, current-angle getters, and visual burst control |
-| `src/debug-gui.js` | Development-only dat.gui controls calling the public API |
+| `src/scene-gui.js` | Swarm controls, live counts, and development-only gun API controls |
+| `src/drones.js` | System-owned timed launch queue, validated spherical spawning, instanced flights, and lifecycle |
+| `src/drone-model.js` | Original merged delta-wing airframe geometry and shared materials |
+| `src/impact-effects.js` | Bounded pools of large fireballs, flame lobes, shockwaves, sparks, smoke, and light |
 | `src/code-editor.js` | CodeMirror JavaScript editor, API completion, Run/Stop toggle, and error status |
 | `src/editor-panel.js` | Pointer/keyboard resizing, collapse/expand behavior, and compass spacing |
 | `src/simulation.js` | Worker lifecycle, frame scheduling, validated API bridge, and watchdogs |
@@ -145,6 +165,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `src/effects.js` | Cosmetic flash, smoke, light streaks, and optional synthesized sound |
 | `tests/api.test.js` | API behavior and lifecycle tests using Node's built-in test runner |
 | `tests/simulation.test.js` | Actual worker execution, API integration, error recovery, isolation, and resource limits |
+| `tests/drones.test.js` | Spawn bounds, launch/impact spacing, frame timing, queue cancellation, effects, and disposal |
 | `public/three-LICENSE.txt` | Three.js MIT license, copied into the production build |
 | `package.json` / `package-lock.json` | npm scripts and reproducible dependency versions |
 | `dist/` | Generated production output; run `npm run build` to create it |
@@ -162,9 +183,10 @@ The API angle limits and burst timing are viewer controls and are not specificat
 - [RTX / Raytheon — Phalanx Weapon System](https://www.rtx.com/raytheon/what-we-do/sea/phalanx-close-in-weapon-system): manufacturer overview and credited U.S. Navy exterior imagery.
 - [General Dynamics OTS — Phalanx brochure](https://www.gd-ots.com/wp-content/uploads/2024/03/400002644-PHALANX-Close-In-Weapon-System-CIWS-Product-Brochure-2024-03-V02-1.pdf): exterior variant references, including Block 1B barrel brace, muzzle restraint, and sensor additions.
 - [U.S. Navy — USS Gridley, February 17, 2022](https://www.navy.mil/Resources/Photo-Gallery/igphoto/2002942051/): official exterior photograph, image 220217-N-JO829-1899.
+- [U.S. Defense Intelligence Agency — Shahed-136 exterior drawing, hosted on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Shahed-136_(Geran-2)_drawing_by_Defense_Intelligence_Agency.jpg): visual reference for the drone silhouette and wingtip fins; no reference image is embedded in the app.
 
 The app contains original procedural geometry and original effects. No external photographs or third-party 3D assets are embedded. Three.js is distributed under its included MIT license.
 
 ## Verification
 
-Run `npm run check`, `npm test`, and `npm run build` to verify syntax, API behavior, sandbox execution, and production bundling. Tests use real worker threads and the same QuickJS engine to verify frame timing, stopping, restarts, error lines, discarded commands, infinite-loop interruption, guest memory limits, unavailable host globals, stale responses, validated command batches, and watchdog termination. Interactive browser QA requires a browser with WebGL 2 and hardware acceleration.
+Run `npm run check`, `npm test`, and `npm run build` to verify syntax, API behavior, sandbox execution, drone spawning and flight, effect cleanup, and production bundling. Tests use real worker threads and the same QuickJS engine to verify frame timing, stopping, restarts, error lines, discarded commands, infinite-loop interruption, guest memory limits, unavailable host globals, stale responses, validated command batches, and watchdog termination. Drone tests cover hemisphere/radius bounds, fixed bearings, nose orientation, constant speed, launch and impact intervals, long/short frame consistency, appended queues, queue cancellation, whole-swarm rejection, large effect layers, pool limits, and disposal. Interactive browser QA requires a browser with WebGL 2 and hardware acceleration.
