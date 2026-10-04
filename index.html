@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1117">
+  <meta name="description" content="An interactive Phalanx Block 1B 3D scene.">
+  <title>Phalanx — Interactive CIWS</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="stage" aria-label="Interactive Phalanx 3D viewer">
+    <div id="viewport" tabindex="0" aria-label="3D scene. Drag to orbit, scroll or pinch to zoom, right-drag to pan."></div>
+    <div class="orientation" aria-hidden="true">
+      <span class="orientation-n">N</span>
+      <svg viewBox="0 0 52 52">
+        <circle cx="26" cy="26" r="21"/>
+        <path d="M26 2v7m24 17h-7M26 50v-7M2 26h7"/>
+        <g id="compass-arrow">
+          <path class="compass-fill" d="m26 12-6 18 6-3 6 3Z"/>
+          <path d="M26 27v12"/>
+        </g>
+      </svg>
+    </div>
+    <section id="script-panel" class="script-panel" aria-labelledby="script-title" data-running="false" data-collapsed="false">
+      <button id="resize-editor" class="script-resize" type="button" aria-label="Resize editor" title="Drag to resize; arrow keys adjust size">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 12 8-8M4 8v4h4M8 4h4v4"/></svg>
+      </button>
+      <header class="script-header">
+        <div>
+          <h1 id="script-title">Gun controller</h1>
+          <p>JavaScript · runs once per frame</p>
+        </div>
+        <div class="script-actions">
+          <button id="toggle-script" type="button" title="Run code (Ctrl / Cmd + Enter)" disabled>Run</button>
+          <button id="toggle-editor" class="script-collapse" type="button" aria-label="Collapse editor" aria-expanded="true" aria-controls="script-body" title="Collapse editor">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+          </button>
+        </div>
+      </header>
+      <div id="script-body" class="script-body">
+        <div id="code-editor"></div>
+        <div class="script-reference">
+          <span>elapsedTime, deltaTime: seconds · angles: radians</span>
+          <code>setAzimuth(rad) · setAltitude(rad) · fire()</code>
+          <code>getCurrentAzimuth() · getCurrentAltitude()</code>
+        </div>
+        <output id="script-status" class="script-status" role="status" aria-live="polite">Preparing scene…</output>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
