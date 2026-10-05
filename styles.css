@@ -579,6 +579,11 @@ body {
     --panel-top-inset: 320px;
   }
 
+  .script-actions {
+    order: -1;
+    flex-shrink: 0;
+  }
+
   .orientation {
     bottom: calc(var(--editor-panel-height, min(420px, 60dvh)) + 26px);
     width: 39px;
