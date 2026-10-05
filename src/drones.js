@@ -9,7 +9,7 @@ export const GUN_HIT_LIMITS = Object.freeze({ radius: 1.5, range: 250 });
 const ORIGIN = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const SCALE = new THREE.Vector3(1, 1, 1);
-const IMPACT_DISTANCE = 1.5; // The local +Z nose reaches the mount's origin here.
+const IMPACT_DISTANCE = 1.5; // The nose reaches the fixed gun pivot here.
 
 function validateOptions(options) {
   const settings = { ...DEFAULT_SWARM, ...options };
@@ -32,7 +32,7 @@ function validateOptions(options) {
 }
 
 /** System-owned launch queue and straight flights, independent of gun scripts. */
-export function createDroneSwarm(scene, { random = Math.random, onImpact = () => {} } = {}) {
+export function createDroneSwarm(scene, { random = Math.random, onImpact = () => {}, groundY = 0 } = {}) {
   const group = new THREE.Group();
   group.name = 'Incoming drone swarm';
   scene.add(group);
@@ -47,7 +47,7 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
     group.add(mesh);
     return mesh;
   });
-  const impacts = createImpactEffects(scene, { random });
+  const impacts = createImpactEffects(scene, { random, groundY });
   const drones = [];
   const pending = [];
   const matrix = new THREE.Matrix4();

@@ -86,7 +86,7 @@ The third parameter, `radarData`, is a fresh array of **live targets only**:
 [{ id: 1, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]
 ```
 
-`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed gun origin in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Existing two-parameter controllers continue to work.
+`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed intersection of the gun's azimuth and altitude axes in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Existing two-parameter controllers continue to work.
 
 The five gun API functions are available directly inside the code, with no imports or `window.phalanx` prefix. Angles are in **radians**. For example:
 
@@ -171,16 +171,21 @@ All angles use **radians**. Azimuth commands wrap around the circle and retain t
 
 ## Model and rig
 
-The origin is at the mounting surface. The world uses **Y up**, **+Z forward / zero bearing**, and **+X right / east**. The camera is independent of the turret, so dragging the view never changes the gun's azimuth or elevation.
+The fixed scene origin `(0, 0, 0)` is the **intersection of the azimuth and altitude rotation axes**, marked by a small red/green/blue axis helper. The world uses **Y up**, **+Z forward / zero bearing**, and **+X right / east**. Geometry retains its deck-relative dimensions internally, while the model root, environment, and camera framing are translated down by 2.08 scene units. The mounting surface is now at `y = -2.08`.
+
+The complete cannon assembly (receiver, magazine, barrel brace, rotor, and muzzle anchor) is raised **0.065 scene units** relative to the elevation cradle, canceling its previous downward offset. Both joint placements and the existing rotation behavior are preserved. The altitude axis still turns with azimuth, and both axes always cross at the fixed origin. The barrel assembly's extended centerline passes through that origin at every azimuth and altitude, including while the rotor spins. The barrel's rear face remains forward of the pivot; its center moves as the gun turns.
+
+Drone spawning, flight destinations, radar positions, and scalar distances all use this same fixed origin. Gun angle conventions are unchanged, so a target's direction from the origin directly yields `Math.atan2(x, z)` for azimuth and `Math.atan2(y, Math.hypot(x, z))` for altitude. The camera is independent of the turret, so dragging the view never changes the gun's azimuth or elevation.
 
 The visual hierarchy is:
 
 - Fixed mount at the deck surface.
 - Azimuth group rotating about local Y, carrying the mounting fork.
 - Elevation cradle rotating about local X, carrying the radome, gun housing, magazine, sensor, and barrel assembly.
+- Aligned cannon group inside the elevation cradle, raising the receiver, magazine, brace, rotor, and muzzle together without moving the joints.
 - Barrel rotor rotating about local Z within the elevation cradle.
 
-Increasing displayed elevation applies **negative X rotation**, raising the +Z-facing barrel cluster. The radome tips rearward with that assembly. The muzzle anchor is attached to the elevation cradle outside the spinning rotor, which keeps its local +Z firing direction stable while the barrels spin.
+Increasing displayed elevation applies **negative X rotation**, raising the +Z-facing barrel cluster. The radome tips rearward with that assembly. The muzzle anchor is attached to the aligned cannon group outside the spinning rotor, which keeps its local +Z firing direction stable while the barrels spin. `model.origin` is a fixed inspection anchor on the model root at the axes' intersection.
 
 `createPhalanx()` exports the named scene graph, joint references, component anchors, wireframe switch, and model statistics:
 

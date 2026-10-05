@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-/** Procedural exhibition setting. The model's mounting surface is world y = 0. */
-export function createEnvironment(scene, renderer) {
+/** Procedural exhibition setting, positioned relative to the mounting surface. */
+export function createEnvironment(scene, renderer, { mountSurfaceY = 0 } = {}) {
   const previous = {
     background: scene.background,
     environment: scene.environment,
@@ -11,6 +11,7 @@ export function createEnvironment(scene, renderer) {
   };
   const group = new THREE.Group();
   group.name = 'Phalanx environment';
+  group.position.y = mountSurfaceY;
   scene.add(group);
   const nautical = new THREE.Group();
   nautical.name = 'Naval deck and ocean';
@@ -243,7 +244,9 @@ export function createEnvironment(scene, renderer) {
   const rim = new THREE.DirectionalLight(0xe2f0ff, 2.5);
   rim.position.set(-2.5, 6, -7);
   const ambient = new THREE.HemisphereLight(0xc4d9eb, 0x3a4653, 0.7);
-  group.add(key, key.target, fill, rim, ambient);
+  group.add(key, key.target, fill, fill.target, rim, rim.target);
+  // Hemisphere lighting encodes its up direction as a world position.
+  scene.add(ambient);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -273,6 +276,7 @@ export function createEnvironment(scene, renderer) {
       if (disposed) return;
       disposed = true;
       scene.remove(group);
+      scene.remove(ambient);
       key.shadow.dispose();
       environmentTarget.dispose();
       for (const resource of resources) resource.dispose();

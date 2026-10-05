@@ -5,7 +5,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 /**
  * Procedural exterior study of a naval Phalanx Block 1B.
  *
- * Coordinates: Y is up; the cannon points along +Z; X is starboard.
+ * Scene zero is the azimuth/elevation axis intersection. Y is up, the cannon
+ * points along +Z at zero angles, and X is starboard. Geometry is authored
+ * relative to the mounting surface, then translated into this fixed frame.
  * The dimensions below establish convincing visual proportions, rather than
  * engineering measurements. No interior mechanisms or fire-control model are
  * represented. Static geometry is merged by material within each movable joint.
@@ -18,6 +20,7 @@ const AZIMUTH_HEIGHT = 1.02;
 const GUN_HEIGHT = -0.065;
 const BARREL_ROOT = 1.08;
 const BARREL_LENGTH = 2.04;
+export const MOUNT_SURFACE_Y = -PIVOT_HEIGHT;
 
 function makeMaterials() {
   const standard = (name, color, metalness, roughness, extra = {}) => {
@@ -563,11 +566,11 @@ function buildOpticalPod(b, m) {
   label(b, 'OPTICS', 'BLOCK 1B', [0.21, 0.079], [1.192, 1.136, 0.067], [0, PI / 2, 0]);
 }
 
-function buildExternalDetails(b, m) {
+function buildExternalDetails(b, m, cannon = b) {
   // Exposed exterior cable looms and small service fittings enrich the sides.
   b.cable('Left radar electrical loom', [[-0.46, 0.27, -0.81], [-0.66, 0.12, -0.8], [-0.74, -0.15, -0.57], [-0.76, -0.30, -0.25], [-0.52, -0.35, 0.0]], 0.037, m.rubber, 56);
   b.cable('Right radar electrical loom', [[0.43, 0.26, -0.86], [0.61, 0.04, -0.85], [0.68, -0.19, -0.52], [0.64, -0.25, -0.21]], 0.028, m.rubber, 44);
-  b.cable('Receiver external hydraulic line', [[-0.37, 0.03, 0.17], [-0.49, 0.11, 0.36], [-0.50, 0.05, 0.78], [-0.37, -0.03, 0.89]], 0.017, m.steel, 40);
+  cannon.cable('Receiver external hydraulic line', [[-0.37, 0.03, 0.17], [-0.49, 0.11, 0.36], [-0.50, 0.05, 0.78], [-0.37, -0.03, 0.89]], 0.017, m.steel, 40);
   for (const side of [-1, 1]) {
     b.cylinder('Rear cable loom connector', 0.059, 0.12, [side * 0.47, 0.26, -0.86], m.steel, 'z', 24);
     b.cylinder('Rear cable connector rubber boot', 0.043, 0.10, [side * 0.47, 0.26, -0.95], m.rubber, 'z', 20);
@@ -577,8 +580,8 @@ function buildExternalDetails(b, m) {
     b.rod('Upper assembly rear handrail', [side * 0.53, -0.07, -0.93], [side * 0.53, 0.12, -1.17], 0.022, m.ivory);
   }
   b.rod('Rear assembly handrail crosspiece', [-0.53, 0.12, -1.17], [0.53, 0.12, -1.17], 0.022, m.ivory);
-  b.box('Receiver service latch base', [0.12, 0.04, 0.19], [-0.31, 0.25, 0.50], m.gray, 0.011);
-  b.box('Receiver service latch lever', [0.036, 0.043, 0.17], [-0.31, 0.285, 0.49], m.red, 0.011);
+  cannon.box('Receiver service latch base', [0.12, 0.04, 0.19], [-0.31, 0.25, 0.50], m.gray, 0.011);
+  cannon.box('Receiver service latch lever', [0.036, 0.043, 0.17], [-0.31, 0.285, 0.49], m.red, 0.011);
   for (const x of [-0.43, 0.43]) {
     b.torus('Cradle lifting lug', 0.057, 0.022, [x, 0.24, -0.64], m.pale, 'x', TAU, 8, 30);
   }
@@ -590,6 +593,8 @@ export function createPhalanx() {
   const root = new THREE.Group();
   root.name = 'Phalanx Block 1B exterior';
   root.userData.description = 'Public-reference exterior visualization; proportions and details are interpretive.';
+  root.position.y = MOUNT_SURFACE_Y;
+  const origin = anchor(root, 'Azimuth and elevation axis intersection', [0, PIVOT_HEIGHT, 0]);
 
   const azimuth = new THREE.Group();
   azimuth.name = 'Azimuth joint';
@@ -601,30 +606,39 @@ export function createPhalanx() {
   elevation.position.y = PIVOT_HEIGHT - AZIMUTH_HEIGHT;
   azimuth.add(elevation);
 
+  // Raise the complete cannon, keeping both joint pivots unchanged. Its
+  // effective local Y is now zero, so its centerline crosses the joint origin.
+  const cannon = new THREE.Group();
+  cannon.name = 'Cannon aligned to rotation axes';
+  cannon.position.y = -GUN_HEIGHT;
+  elevation.add(cannon);
+
   const barrels = new THREE.Group();
   barrels.name = 'Six-barrel rotor joint';
   barrels.position.set(0, GUN_HEIGHT, BARREL_ROOT);
-  elevation.add(barrels);
+  cannon.add(barrels);
 
-  const muzzle = anchor(elevation, 'Muzzle effect anchor', [0, GUN_HEIGHT, BARREL_ROOT + BARREL_LENGTH - 0.018]);
+  const muzzle = anchor(cannon, 'Muzzle effect anchor', [0, GUN_HEIGHT, BARREL_ROOT + BARREL_LENGTH - 0.018]);
 
   const fixedBuilder = new PartBuilder(root);
   const azimuthBuilder = new PartBuilder(azimuth);
   const elevationBuilder = new PartBuilder(elevation);
+  const cannonBuilder = new PartBuilder(cannon);
   const barrelBuilder = new PartBuilder(barrels);
 
   buildFixedBase(fixedBuilder, materials);
   buildAzimuthCradle(azimuthBuilder, materials);
   buildRadarCover(elevationBuilder, materials);
-  buildReceiverAndMagazine(elevationBuilder, materials);
-  buildBarrelBrace(elevationBuilder, materials);
+  buildReceiverAndMagazine(cannonBuilder, materials);
+  buildBarrelBrace(cannonBuilder, materials);
   buildRotatingBarrels(barrelBuilder, materials);
   buildOpticalPod(elevationBuilder, materials);
-  buildExternalDetails(elevationBuilder, materials);
+  buildExternalDetails(elevationBuilder, materials, cannonBuilder);
 
   fixedBuilder.finish();
   azimuthBuilder.finish();
   elevationBuilder.finish();
+  cannonBuilder.finish();
   barrelBuilder.finish();
 
   const hotspots = [
@@ -641,12 +655,12 @@ export function createPhalanx() {
     {
       id: 'barrels', label: 'Six-barrel assembly',
       description: 'Six separately modeled barrel tubes rotate within the exterior brace and forward muzzle restraint.',
-      anchor: anchor(elevation, 'Barrel inspection point', [-0.03, GUN_HEIGHT + 0.20, 2.25]),
+      anchor: anchor(cannon, 'Barrel inspection point', [-0.03, GUN_HEIGHT + 0.20, 2.25]),
     },
     {
       id: 'magazine', label: 'Ammunition drum',
       description: 'The exterior drum includes ribbed covers, bolted flanges, access fittings, and a corrugated feed-chute cover.',
-      anchor: anchor(elevation, 'Magazine inspection point', [-0.69, -0.63, 0.75]),
+      anchor: anchor(cannon, 'Magazine inspection point', [-0.69, -0.63, 0.75]),
     },
     {
       id: 'elevation', label: 'Elevation trunnion',
@@ -681,5 +695,5 @@ export function createPhalanx() {
     return { meshes, triangles: Math.round(triangles) };
   }
 
-  return { root, azimuth, elevation, barrels, muzzle, hotspots, setWireframe, getStats };
+  return { root, origin, azimuth, elevation, cannon, barrels, muzzle, hotspots, setWireframe, getStats };
 }

@@ -7,7 +7,7 @@ const SPARKS_PER_BURST = 48;
 const FLAMES_PER_BURST = 5;
 
 /** Bounded fireballs, flame lobes, shockwaves, smoke, and sparks; no external textures. */
-export function createImpactEffects(scene, { random = Math.random, capacity = 32 } = {}) {
+export function createImpactEffects(scene, { random = Math.random, capacity = 32, groundY = 0 } = {}) {
   const group = new THREE.Group();
   group.name = 'Drone impact effects';
   scene.add(group);
@@ -234,7 +234,7 @@ export function createImpactEffects(scene, { random = Math.random, capacity = 32
         if (t < 1.8) {
           for (const direction of burst.directions) {
             position.copy(burst.center).addScaledVector(direction, t);
-            position.y = Math.max(0.06, position.y + 0.7 - 3.8 * t * t);
+            position.y = Math.max(groundY + 0.06, position.y + 0.7 - 3.8 * t * t);
             sparkGeometry.attributes.position.setXYZ(particles, position.x, position.y, position.z);
             sparkGeometry.attributes.aOpacity.setX(particles, 1 - t / 1.8);
             sparkGeometry.attributes.aSize.setX(particles, 0.2);

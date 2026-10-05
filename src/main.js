@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createPhalanx } from './model.js';
+import { createPhalanx, MOUNT_SURFACE_Y } from './model.js';
 import { createEnvironment } from './environment.js';
 import { createFiringEffects } from './effects.js';
 import { MOTION } from './motion.js';
@@ -55,13 +55,20 @@ async function start() {
   controls.rotateSpeed = 0.65;
   controls.zoomSpeed = 0.7;
   controls.autoRotateSpeed = 0.55;
-  controls.target.set(0, 1.95, 0.4);
+  controls.target.set(0, 1.95 + MOUNT_SURFACE_Y, 0.4);
 
-  const environment = createEnvironment(scene, renderer);
+  const environment = createEnvironment(scene, renderer, { mountSurfaceY: MOUNT_SURFACE_Y });
   const model = createPhalanx();
   scene.add(model.root);
+  model.azimuth.rotation.y = getCurrentAzimuth();
   model.elevation.rotation.x = -getCurrentAltitude();
-  const drones = createDroneSwarm(scene);
+  const axes = new THREE.AxesHelper(0.7);
+  axes.name = 'Fixed rotation axes origin';
+  axes.material.depthTest = false;
+  axes.material.toneMapped = false;
+  axes.renderOrder = 6;
+  scene.add(axes);
+  const drones = createDroneSwarm(scene, { groundY: MOUNT_SURFACE_Y });
   const effects = createFiringEffects(scene, model.muzzle, { onShot: (origin, direction) => drones.fireRay(origin, direction) });
   const radar = createRadar();
   radar.update(0, getCurrentAzimuth(), drones.getRadarData(), drones.getState());
@@ -85,8 +92,8 @@ async function start() {
   resize();
 
   // Keep the original perspective camera framing.
-  camera.position.set(7.1, 4.7, 8.8);
-  controls.target.set(0, 1.95, 0.5);
+  camera.position.set(7.1, 4.7 + MOUNT_SURFACE_Y, 8.8);
+  controls.target.set(0, 1.95 + MOUNT_SURFACE_Y, 0.5);
   controls.update();
 
   function updateCompass() {
@@ -117,6 +124,8 @@ async function start() {
     window.removeEventListener('pagehide', onPageHide);
     sceneGui?.destroy();
     codeEditor?.destroy();
+    scene.remove(axes);
+    axes.dispose();
     effects.dispose();
     drones.dispose();
     radar.destroy();
