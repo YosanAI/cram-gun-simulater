@@ -141,6 +141,31 @@ body {
   pointer-events: none;
 }
 
+.creator-credit {
+  position: absolute;
+  left: 20px;
+  bottom: 3px;
+  z-index: 2;
+  color: #8da4af;
+  font: 10px/12px system-ui, sans-serif;
+  white-space: nowrap;
+}
+
+.creator-credit a {
+  color: #a6dbbe;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.creator-credit a:hover {
+  color: #d9ffe9;
+}
+
+.creator-credit a:focus-visible {
+  outline: 2px solid #d7f3e1;
+  outline-offset: 2px;
+}
+
 .orientation {
   position: absolute;
   bottom: 24px;
@@ -598,6 +623,11 @@ body {
 @media (max-width: 600px) {
   .stage {
     --controls-top: 76px;
+  }
+
+  .creator-credit {
+    left: 12px;
+    bottom: 0;
   }
 
   .scene-controls {
