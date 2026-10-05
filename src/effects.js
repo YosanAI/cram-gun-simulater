@@ -3,7 +3,7 @@ import * as THREE from 'three';
 /**
  * Firing visuals and per-shot callback. The muzzle's local +Z points down the barrels.
  * Smoke and streaks leave that moving frame and continue in world space.
- * Audio is opt-in and must first be unlocked by a pointer / keyboard gesture.
+ * Scene audio is owned by the shared mixer in audio.js.
  */
 export function createFiringEffects(scene, muzzle, { onShot = () => {} } = {}) {
   const SMOKE_COUNT = 40;
@@ -20,9 +20,7 @@ export function createFiringEffects(scene, muzzle, { onShot = () => {} } = {}) {
   const identity = new THREE.Quaternion();
   const localForward = new THREE.Vector3(0, 0, 1);
   let enabled = true;
-  let soundEnabled = false;
   let disposed = false;
-  let audio = null;
   let smokeCursor = 0;
   let streakCursor = 0;
   let smokeBudget = 0;
@@ -287,7 +285,6 @@ export function createFiringEffects(scene, muzzle, { onShot = () => {} } = {}) {
     streaks.instanceMatrix.needsUpdate = true;
     smokeGeometry.attributes.aOpacity.needsUpdate = true;
     streakGeometry.attributes.aOpacity.needsUpdate = true;
-    updateAudio(level);
     lastIntensity = level;
   }
 
@@ -299,104 +296,7 @@ export function createFiringEffects(scene, muzzle, { onShot = () => {} } = {}) {
       smokeBudget = 0;
       streakBudget = 0;
       lastIntensity = 0;
-      updateAudio(0);
     }
-  }
-
-  function ensureAudio() {
-    if (audio || disposed) return audio;
-    const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!AudioContext) return null;
-    try {
-      const context = new AudioContext();
-      const master = context.createGain();
-      master.gain.value = 0;
-      const limiter = context.createDynamicsCompressor();
-      limiter.threshold.value = -20;
-      limiter.knee.value = 12;
-      limiter.ratio.value = 5;
-      master.connect(limiter);
-      limiter.connect(context.destination);
-
-      const motor = context.createOscillator();
-      motor.type = 'sawtooth';
-      motor.frequency.value = 38;
-      const motorFilter = context.createBiquadFilter();
-      motorFilter.type = 'lowpass';
-      motorFilter.frequency.value = 280;
-      const motorGain = context.createGain();
-      motorGain.gain.value = 0.022;
-      motor.connect(motorFilter);
-      motorFilter.connect(motorGain);
-      motorGain.connect(master);
-
-      const buzz = context.createOscillator();
-      buzz.type = 'square';
-      buzz.frequency.value = 145;
-      const buzzGain = context.createGain();
-      buzzGain.gain.value = 0.009;
-      buzz.connect(buzzGain);
-      buzzGain.connect(master);
-
-      const noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
-      const samples = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
-      const noise = context.createBufferSource();
-      noise.buffer = noiseBuffer;
-      noise.loop = true;
-      const noiseFilter = context.createBiquadFilter();
-      noiseFilter.type = 'bandpass';
-      noiseFilter.frequency.value = 1350;
-      noiseFilter.Q.value = 0.55;
-      const noiseGain = context.createGain();
-      noiseGain.gain.value = 0.11;
-      noise.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      noiseGain.connect(master);
-      motor.start();
-      buzz.start();
-      noise.start();
-
-      audio = { context, master, motor, buzz, noise, motorFilter, noiseFilter, level: -1 };
-      return audio;
-    } catch {
-      // A browser without available audio still runs the complete visual scene.
-      return null;
-    }
-  }
-
-  function updateAudio(intensity) {
-    if (!audio) return;
-    const target = soundEnabled && enabled ? intensity : 0;
-    if (Math.abs(audio.level - target) < 0.007 && target !== 0) return;
-    if (audio.level === target) return;
-    audio.level = target;
-    const now = audio.context.currentTime;
-    audio.master.gain.setTargetAtTime(target * 0.64, now, target > 0 ? 0.035 : 0.055);
-    audio.motor.frequency.setTargetAtTime(38 + target * 103, now, 0.14);
-    audio.buzz.frequency.setTargetAtTime(95 + target * 92, now, 0.085);
-    audio.motorFilter.frequency.setTargetAtTime(190 + target * 560, now, 0.12);
-    audio.noiseFilter.frequency.setTargetAtTime(900 + target * 780, now, 0.09);
-  }
-
-  async function unlockAudio() {
-    const state = ensureAudio();
-    if (!state) return false;
-    try {
-      if (state.context.state === 'suspended') await state.context.resume();
-      return state.context.state === 'running';
-    } catch {
-      return false;
-    }
-  }
-
-  function setSoundEnabled(value) {
-    soundEnabled = Boolean(value);
-    if (soundEnabled) {
-      // Call this from a gesture handler. Rejected autoplay is intentionally quiet.
-      void unlockAudio();
-    }
-    updateAudio(lastIntensity);
   }
 
   function dispose() {
@@ -417,16 +317,9 @@ export function createFiringEffects(scene, muzzle, { onShot = () => {} } = {}) {
     streakMaterial.dispose();
     smoke.dispose();
     streaks.dispose();
-    if (audio) {
-      audio.motor.stop();
-      audio.buzz.stop();
-      audio.noise.stop();
-      void audio.context.close().catch(() => {});
-      audio = null;
-    }
   }
 
-  return { update, setEnabled, setSoundEnabled, unlockAudio, dispose };
+  return { update, setEnabled, dispose };
 }
 
 function createParticles(count) {

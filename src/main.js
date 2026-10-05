@@ -7,6 +7,7 @@ import { MOTION } from './motion.js';
 import { createCodeEditor } from './code-editor.js';
 import { createDroneSwarm } from './drones.js';
 import { createRadar } from './radar.js';
+import { createSceneAudio } from './audio.js';
 import {
   setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
   advanceMotion, getSceneState, stopFiring,
@@ -68,7 +69,10 @@ async function start() {
   axes.material.toneMapped = false;
   axes.renderOrder = 6;
   scene.add(axes);
-  const drones = createDroneSwarm(scene, { groundY: MOUNT_SURFACE_Y });
+  const sound = createSceneAudio();
+  const drones = createDroneSwarm(scene, {
+    groundY: MOUNT_SURFACE_Y, onExplosion: sound.playExplosion, onClear: sound.clearDrones,
+  });
   const effects = createFiringEffects(scene, model.muzzle, { onShot: (origin, direction) => drones.fireRay(origin, direction) });
   const radar = createRadar();
   radar.update(0, getCurrentAzimuth(), drones.getRadarData(), drones.getState());
@@ -76,6 +80,7 @@ async function start() {
   function stopInput() {
     stopFiring();
     effects.setEnabled(false);
+    sound.stopFiring();
   }
 
   function resize() {
@@ -105,12 +110,19 @@ async function start() {
   window.phalanx = Object.freeze({
     setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
     model, scene, camera,
+    sound: Object.freeze({ setEnabled: sound.setEnabled, setVolume: sound.setVolume, getState: sound.getState }),
     getState: getSceneState,
     getStats: () => ({ ...model.getStats(), drawCalls: renderer.info.render.calls, renderedTriangles: renderer.info.render.triangles }),
   });
 
-  window.addEventListener('blur', stopInput);
-  const onVisibilityChange = () => { if (document.hidden) stopInput(); };
+  const onBlur = () => { stopInput(); sound.setPaused(true); };
+  const onFocus = () => { if (!document.hidden) sound.setPaused(false); };
+  window.addEventListener('blur', onBlur);
+  window.addEventListener('focus', onFocus);
+  const onVisibilityChange = () => {
+    if (document.hidden) stopInput();
+    sound.setPaused(document.hidden || !document.hasFocus());
+  };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
   function dispose() {
@@ -119,15 +131,18 @@ async function start() {
     disposed = true;
     cancelAnimationFrame(frameId);
     resizeObserver.disconnect();
-    window.removeEventListener('blur', stopInput);
+    window.removeEventListener('blur', onBlur);
+    window.removeEventListener('focus', onFocus);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('pageshow', onPageShow);
     sceneGui?.destroy();
     codeEditor?.destroy();
     scene.remove(axes);
     axes.dispose();
     effects.dispose();
     drones.dispose();
+    sound.dispose();
     radar.destroy();
     environment.dispose();
     controls.dispose();
@@ -135,10 +150,13 @@ async function start() {
   }
   function onPageHide(event) {
     stopInput();
+    sound.setPaused(true);
     // Preserve the renderer for pages restored through the back/forward cache.
     if (!event.persisted) dispose();
   }
   window.addEventListener('pagehide', onPageHide);
+  const onPageShow = () => { if (!document.hidden && document.hasFocus()) sound.setPaused(false); };
+  window.addEventListener('pageshow', onPageShow);
   renderer.domElement.addEventListener('webglcontextlost', event => {
     event.preventDefault();
     dispose();
@@ -160,7 +178,7 @@ async function start() {
 
   const { createSceneGui } = await import('./scene-gui.js');
   if (disposed) return;
-  sceneGui = createSceneGui({ drones, includeGunControls: import.meta.env.DEV });
+  sceneGui = createSceneGui({ drones, sound, includeGunControls: import.meta.env.DEV });
   if (disposed) return;
 
   let lastTime = performance.now();
@@ -180,7 +198,9 @@ async function start() {
     effects.setEnabled(state.firing);
     effects.update(dt, state.elapsed, state.drive);
     environment.update(dt, state.elapsed);
-    radar.update(dt, state.azimuth * DEG, drones.getRadarData(), drones.getState());
+    const radarData = drones.getRadarData();
+    sound.update({ firing: state.firing, drive: state.drive, deltaTime: dt, radarData });
+    radar.update(dt, state.azimuth * DEG, radarData, drones.getState());
 
     controls.update(dt);
     scene.updateMatrixWorld();

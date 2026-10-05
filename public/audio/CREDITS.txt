@@ -1,0 +1,40 @@
+Local sound assets — all licensed CC0 1.0 Universal
+https://creativecommons.org/publicdomain/zero/1.0/
+
+phalanx.mp3
+"Navy MK 15 Phalanx CIWS Anti-Air Fast Burst" — qubodup / Iwan Gabovitch
+https://freesound.org/people/qubodup/sounds/163119/
+https://cdn.freesound.org/previews/163/163119_71257-hq.mp3
+Extracted by its creator from public-domain U.S. government footage. Playback
+selects a sustained section, mixes to mono and crossfades the loop seam.
+
+drone-engine.mp3
+"Two Stroke Revving" — Yoo-toob-FX
+https://directory.audio/sound-effects/transportation/900-two-stroke-revving
+https://directory.audio/media/fc_local_media/audio_preview/two-stroke-revving.mp3
+An approximation of a small piston-engine drone, not a recording of the modeled
+drone. Playback selects a steady section, crossfades and varies pitch by drone ID.
+
+airburst.mp3
+"Grenade Explosion SFX (medium-sized, meaty, realistic)" — unfa
+https://freesound.org/people/unfa/sounds/609587/
+https://cdn.freesound.org/previews/609/609587_1038806-hq.mp3
+Designed with synthesis and a firecracker recording. Playback keeps the first
+2.1 seconds after onset with a faded tail and a slightly raised pitch.
+
+impact.mp3
+"Beefy Explosions" — SamsterBirdies
+https://freesound.org/people/SamsterBirdies/sounds/745549/
+https://cdn.freesound.org/previews/745/745549_5487341-hq.mp3
+Playback keeps the first 3.3 seconds after onset, lowers pitch and filters the
+high end for a heavier detonation than the airborne shot-down effect.
+
+metal-crash.mp3
+"Collision" — qubodup / Iwan Gabovitch
+https://freesound.org/people/qubodup/sounds/332058/
+https://cdn.freesound.org/previews/332/332058_71257-hq.mp3
+Added only to unshot impacts, to distinguish collision and debris from airbursts.
+
+Files are publicly available MP3 previews of these CC0 works. No original asset
+is downloaded from external sites at runtime. Attribution is included for
+provenance even though these licenses do not require it.

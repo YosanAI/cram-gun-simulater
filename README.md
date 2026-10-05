@@ -1,6 +1,6 @@
 # Phalanx — Interactive CIWS
 
-A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, and a live radar widget. A dat.gui panel controls drone spawning in every build and also exercises the gun API during development.
+A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, a live radar widget, and sampled sound effects. A dat.gui panel controls sound and drone spawning in every build and also exercises the gun API during development.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ Available commands:
 | `npm run build` | Create the production website in `dist/` |
 | `npm run preview` | Serve the production build locally after building |
 | `npm run check` | Check the application JavaScript syntax |
-| `npm test` | Verify the angle API, script sandbox, drone flights, impacts, and resource cleanup |
+| `npm test` | Verify the angle API, script sandbox, drone flights, impacts, audio behavior, and resource cleanup |
 
 Three.js is installed through npm and pinned to **0.180.0**. Vite resolves its imports during development and bundles it for production. All model geometry, material labels, environment textures, and firing effects are generated locally.
 
@@ -55,6 +55,21 @@ Gun hits use **hitscan ray–sphere intersection**. Each emitted firing streak t
 The first shot appears as the firing effects start; subsequent shots follow the existing streak emission budget of up to **19 shots per simulation second**, scaled by barrel drive. These are illustrative gameplay settings. Hits are instantaneous; the visible streaks are cosmetic and do not model projectile flight, gravity, or travel time.
 
 A hit removes both airframe instances and the radar target immediately, bursts fire, sparks, a shockwave, and smoke at the drone's world position, and increments **killed** exactly once. A drone that reaches the mount instead increments **impacts**, without awarding a kill. The radar has a persistent kill counter, also repeated in the swarm controls. Clearing drones resets both counters and all effects.
+
+## Sound
+
+Sound is enabled by default at 65% volume. Click, tap, or press a key to activate browser audio. The **Sound** folder provides **Sound on**, **Volume (%)**, and an **Audio** status field. All samples are bundled locally; playback never contacts an external sound service. Sources and CC0 licenses are listed in [public/audio/CREDITS.txt](public/audio/CREDITS.txt).
+
+- **Firing:** a real Phalanx recording, trimmed into a continuous burst loop that plays while the gun fires.
+- **Drones:** a two-stroke engine recording approximates a small piston-engine drone. Each live drone has a desynchronized loop with slight pitch variation and Doppler adjustment.
+- **Shot-down drones:** a shorter, sharper airburst plays at the destroyed target's position, and its engine stops immediately.
+- **Unshot impacts:** a deeper, longer explosion with a metal crash layer plays when a drone reaches the gun. This uses the existing mount-impact event; drone flights still terminate at the gun origin.
+
+The listener stays at the fixed gun origin, facing +Z. Moving the camera does not change sound volume or direction. Engine and explosion volume depend on 3D distance `d`, using `8 / (8 + 1.6 * Math.max(0, d - 8))`. Nearby sounds have full spatial gain; distant sounds are quieter and lose high frequencies. Left/right panning follows the target's position relative to the fixed origin. This is an illustrative sound mix rather than a calibrated acoustic simulation.
+
+The mixer limits playback to the nearest 24 engine voices and 16 simultaneous explosions, with a shared compressor. **Clear drones** stops their engines and explosions. Stopping the controller cancels gun audio; losing focus or hiding the page silences and suspends all audio. Returning to the page resumes live engine sounds. Disposal stops sources, disconnects nodes, and closes the audio context. Browsers without available audio still run the visual scene.
+
+For browser-console control, `window.phalanx.sound.setEnabled(boolean)`, `setVolume(0…1)`, and `getState()` are available. These controls are separate from the editor's gun API.
 
 ## Radar
 
@@ -167,7 +182,7 @@ The same functions are available as `window.phalanx.setAzimuth(rad)`, `window.ph
 
 All angles use **radians**. Azimuth commands wrap around the circle and retain the existing shortest-path smoothing. `getCurrentAzimuth()` returns the current animated bearing in `[0, 2π)`. Elevation means the barrel inclination above horizontal; it is clamped to the existing **−15° to +85°** range (approximately **−0.262 to +1.484 rad**), with an initial inclination of **10°**. The getters return the current animated pose, so they may differ from a newly commanded angle while the mount moves. Setters reject non-finite values and non-number inputs with `TypeError`.
 
-`fire()` starts a **0.7-second burst** using barrel spin, muzzle flash, smoke, and streak effects, with gun hit detection on each emitted streak. Calling it again extends the burst to 0.7 seconds from the latest call. Losing focus or hiding the page cancels firing. Sound remains disabled.
+`fire()` starts a **0.7-second burst** using barrel spin, muzzle flash, smoke, streak effects, and the firing sound, with gun hit detection on each emitted streak. Calling it again extends the burst to 0.7 seconds from the latest call. Losing focus or hiding the page cancels firing.
 
 ## Model and rig
 
@@ -208,7 +223,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `styles.css` | Scene, compass, and editor layout |
 | `src/main.js` | Existing scene setup, orbit controls, compass, lifecycle, and render loop |
 | `src/api.js` | Radian angle commands, current-angle getters, and firing burst control |
-| `src/scene-gui.js` | Swarm controls, live counts, and development-only gun API controls |
+| `src/scene-gui.js` | Sound and swarm controls, live counts, and development-only gun API controls |
 | `src/drones.js` | Timed launches, instanced flights, radar snapshots, gun hit detection, destruction, and counters |
 | `src/drone-model.js` | Original merged delta-wing airframe geometry and shared materials |
 | `src/impact-effects.js` | Bounded pools of large fireballs, flame lobes, shockwaves, sparks, smoke, and light |
@@ -224,10 +239,13 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `src/model.js` | Procedural model, materials, exterior details, component anchors, and joint hierarchy |
 | `src/motion.js` | Viewer limits, angle wrapping, and frame-rate-independent motion smoothing |
 | `src/environment.js` | Deck, studio, ocean, generated surface textures, lighting, and environment reflections |
-| `src/effects.js` | Flash, smoke, light streaks, per-shot hit callback, and optional synthesized sound |
+| `src/effects.js` | Flash, smoke, light streaks, and per-shot hit callback |
+| `src/audio.js` | Sample preparation, shared mixer, distance attenuation, engine voices, and classified explosions |
+| `public/audio/` | Bundled CC0 sound recordings/effects and their source credits |
 | `tests/api.test.js` | API behavior and lifecycle tests using Node's built-in test runner |
 | `tests/simulation.test.js` | Actual worker execution, API integration, error recovery, isolation, and resource limits |
 | `tests/drones.test.js` | Spawn bounds, launch/impact spacing, frame timing, queue cancellation, effects, and disposal |
+| `tests/audio.test.js` | Audio activation, sample preparation, distance, event classification, voice limits, and cleanup |
 | `public/three-LICENSE.txt` | Three.js MIT license, copied into the production build |
 | `package.json` / `package-lock.json` | npm scripts and reproducible dependency versions |
 | `dist/` | Generated production output; run `npm run build` to create it |
@@ -236,7 +254,7 @@ The app also retains `window.phalanx.getState()` and `window.phalanx.getStats()`
 
 ## Scope and accuracy
 
-This is an **exterior visual replica**, not a measured or verified engineering digital twin. Forms and proportions are interpreted from public references. It has no live connection to a real machine. Internal mechanisms, sensor behavior, and physical ballistics are not modeled; gun hits use the simplified gameplay rules above. Smoke and streaks are visual effects; the audio is synthesized. The movement range and timing are selected for comfortable viewing and are not specifications for the real equipment.
+This is an **exterior visual replica**, not a measured or verified engineering digital twin. Forms and proportions are interpreted from public references. It has no live connection to a real machine. Internal mechanisms, sensor behavior, and physical ballistics are not modeled; gun hits use the simplified gameplay rules above. Smoke and streaks are visual effects. Gun audio uses a real recording; drone engines and explosions are sound-design approximations. The movement range and timing are selected for comfortable viewing and are not specifications for the real equipment.
 
 The API angle limits and burst timing are viewer controls and are not specifications for the real equipment.
 

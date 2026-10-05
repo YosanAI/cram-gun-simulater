@@ -364,6 +364,23 @@ test('firing effects hit through the current muzzle world transform and disabled
   assert.equal(shots, 1);
 });
 
+test('destruction events distinguish shot-down airbursts from unshot impacts exactly once', t => {
+  const explosions = [];
+  let clears = 0;
+  const { swarm } = harness(t, { onExplosion: event => explosions.push(event), onClear: () => clears++ });
+  const [shotId] = swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, elevation: 0 });
+  swarm.fireRay(new THREE.Vector3(), new THREE.Vector3(0, 0, 1));
+  swarm.update(6);
+  assert.deepEqual(explosions, [{ id: shotId, kind: 'airburst', pos: { x: 0, y: 0, z: 20 } }]);
+  const [impactId] = swarm.queueSwarm({ count: 1, minRadius: 5, maxRadius: 5, speed: 20, randomDirections: false, elevation: 0 });
+  swarm.update(1);
+  assert.deepEqual(explosions[1], { id: impactId, kind: 'impact', pos: { x: 0, y: 0, z: 0 } });
+  swarm.update(6);
+  assert.equal(explosions.length, 2);
+  swarm.clear();
+  assert.equal(clears, 1);
+});
+
 test('shot emission cadence stays consistent across frame sizes', t => {
   function countShots(steps, delta) {
     const scene = new THREE.Scene();

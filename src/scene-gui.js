@@ -3,7 +3,7 @@ import { ANGLE_LIMITS, setAzimuth, setElevation, getCurrentAzimuth, getCurrentEl
 import { DEFAULT_SWARM, DRONE_LIMITS } from './drones.js';
 
 /** Swarm controls in every build, with gun API testing controls in development. */
-export function createSceneGui({ drones, includeGunControls = false }) {
+export function createSceneGui({ drones, sound, includeGunControls = false }) {
   const host = document.getElementById('scene-controls');
   const status = document.createElement('output');
   status.className = 'scene-controls-status';
@@ -12,6 +12,18 @@ export function createSceneGui({ drones, includeGunControls = false }) {
   const gui = new GUI({ name: 'Scene controls', width: 280, autoPlace: false, closeOnTop: true });
   gui.domElement.style.width = '100%';
   host.append(status, gui.domElement);
+  let audioStatus;
+  let audioValues;
+  if (sound) {
+    const state = sound.getState();
+    audioValues = { enabled: state.enabled, volume: state.volume * 100, status: state.status };
+    const audio = gui.addFolder('Sound');
+    audio.add(audioValues, 'enabled').name('Sound on').onChange(sound.setEnabled);
+    audio.add(audioValues, 'volume', 0, 100).step(1).name('Volume (%)').onChange(value => sound.setVolume(value / 100));
+    audioStatus = audio.add(audioValues, 'status').name('Audio');
+    audioStatus.domElement.querySelector('input').readOnly = true;
+    audio.open();
+  }
   const values = {
     azimuth: getCurrentAzimuth(),
     elevation: getCurrentElevation(),
@@ -112,6 +124,10 @@ export function createSceneGui({ drones, includeGunControls = false }) {
   return {
     sync() {
       updateStatus();
+      if (sound && audioValues.status !== sound.getState().status) {
+        audioValues.status = sound.getState().status;
+        audioStatus.updateDisplay();
+      }
       if (!includeGunControls) return;
       // Read the public getters without interrupting a drag or numeric edit.
       const focused = document.activeElement;

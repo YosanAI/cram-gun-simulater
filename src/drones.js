@@ -32,7 +32,7 @@ function validateOptions(options) {
 }
 
 /** System-owned launch queue and straight flights, independent of gun scripts. */
-export function createDroneSwarm(scene, { random = Math.random, onImpact = () => {}, groundY = 0 } = {}) {
+export function createDroneSwarm(scene, { random = Math.random, onImpact = () => {}, onExplosion = () => {}, onClear = () => {}, groundY = 0 } = {}) {
   const group = new THREE.Group();
   group.name = 'Incoming drone swarm';
   scene.add(group);
@@ -81,6 +81,7 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
     lastSpawnAt = -Infinity;
     impacts.clear();
     syncMeshes();
+    onClear();
   }
 
   function activateReady() {
@@ -100,6 +101,7 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
         drones.splice(i, 1);
         impactCount++;
         impacts.burst(ORIGIN, Math.max(0, deltaTime - timeToImpact));
+        onExplosion({ id: drone.id, kind: 'impact', pos: { x: 0, y: 0, z: 0 } });
         onImpact({ id: drone.id, position: ORIGIN.clone(), time: simulationTime + timeToImpact });
       } else {
         drone.position.addScaledVector(drone.direction, drone.speed * deltaTime);
@@ -177,6 +179,7 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
       killedCount++;
       // The burst follows the drone's world position, including airborne hits.
       impacts.burst(drone.position);
+      onExplosion({ id: drone.id, kind: 'airburst', pos: { x: drone.position.x, y: drone.position.y, z: drone.position.z } });
       impacts.update(0);
       syncMeshes();
       return { id: drone.id, position: drone.position.clone() };
