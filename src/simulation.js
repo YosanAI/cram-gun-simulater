@@ -1,6 +1,17 @@
 import { SANDBOX_LIMITS, validateCommands, validateConsoleEntries, serializeSandboxError } from './sandbox-limits.js';
 
-export const DEFAULT_CODE = 'function updateGun(elapsedTime, deltaTime, radarData) {\n\n}\n';
+export const DEFAULT_CODE = `function updateGun(elapsedTime, deltaTime, radarData) {
+  // Uncomment to see the API in action.
+  /*
+  const azimuth = getCurrentAzimuth();
+  const elevation = getCurrentElevation();
+
+  setAzimuth(azimuth + 0.01);
+  setElevation(elevation + 0.01);
+  fire();
+  */
+}
+`;
 
 const defaultWorker = () => new Worker(new URL('./sandbox.worker.js', import.meta.url), { type: 'module' });
 
