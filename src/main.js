@@ -10,6 +10,7 @@ import { createRadar } from './radar.js';
 import { createSceneAudio } from './audio.js';
 import { createCameraViews } from './camera-views.js';
 import { createFullscreenView } from './fullscreen-view.js';
+import { createSoundToggle } from './sound-toggle.js';
 import {
   setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
   advanceMotion, getSceneState, stopFiring,
@@ -95,6 +96,7 @@ async function start() {
     status: document.getElementById('camera-view-status'), viewport,
   });
   const fullscreenView = createFullscreenView(viewport.parentElement, document.getElementById('toggle-fullscreen'));
+  const soundToggle = createSoundToggle(document.getElementById('toggle-sound'), sound);
 
   function resize() {
     const width = Math.max(1, viewport.clientWidth);
@@ -149,6 +151,7 @@ async function start() {
     sceneGui?.destroy();
     codeEditor?.destroy();
     fullscreenView.destroy();
+    soundToggle.destroy();
     cameraViews.destroy();
     scene.remove(axes);
     axes.dispose();
@@ -187,7 +190,7 @@ async function start() {
 
   const { createSceneGui } = await import('./scene-gui.js');
   if (disposed) return;
-  sceneGui = createSceneGui({ drones, sound, includeGunControls: import.meta.env.DEV });
+  sceneGui = createSceneGui({ drones, includeGunControls: import.meta.env.DEV });
   if (disposed) return;
 
   codeEditor = createCodeEditor({
@@ -215,6 +218,7 @@ async function start() {
     environment.update(dt, state.elapsed);
     const radarData = drones.getRadarData();
     sound.update({ firing: state.firing, drive: state.drive, deltaTime: dt, radarData });
+    soundToggle.sync();
     radar.update(dt, state.azimuth * DEG, radarData, drones.getState());
 
     scene.updateMatrixWorld();

@@ -1,6 +1,6 @@
 # Phalanx — Interactive CIWS
 
-A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, a live radar widget, and sampled sound effects. A dat.gui panel controls sound and drone spawning in every build and also exercises the gun API during development.
+A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, a live radar widget, and sampled sound effects. A dat.gui panel controls drone spawning in every build and also exercises the gun API during development. A sound toggle sits beside the fullscreen button in the camera toolbar.
 
 ## Run locally
 
@@ -37,7 +37,7 @@ Orbit input applies only to **Free**. All cameras resize with the viewport, keep
 
 Click the **fullscreen icon** at the right of the camera tabs for an unobstructed scene. Only the camera tab bar remains visible; the editor, scene controls, radar, compass, and camera status are hidden. Camera switching and running code continue normally. Click the icon again or press **Escape** to restore the panels and their previous collapse states. Browsers without fullscreen support use the same view within the browser window.
 
-The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, an additional **Gun API testing** folder provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
+The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, a **Gun API testing** folder above the swarm settings provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
 
 ## Drone swarms
 
@@ -46,7 +46,6 @@ Each **Run** in the code editor automatically queues a swarm after the first `up
 - **Swarm size:** 1–200 drones per request, with at most 200 in flight or waiting to launch.
 - **Spawn interval (s):** 0.1–10 seconds between launches. The initial drone launches immediately; subsequent drones appear one at a time. Additional requests join the existing schedule and respect the selected spacing, even if the previous request contained only one drone.
 - **Near radius / Far radius:** minimum and maximum distance from the gun's origin, from 5–200 scene units. Equal values place drones at one exact distance. Adjusting either limit keeps the range ordered.
-- **Random directions:** distributes the swarm across the hemisphere above the origin. Turn this off to choose **Azimuth (°)** from 0–360° and **Elevation (°)** from 0–90° above the horizon. Zero azimuth is +Z; 90° is +X, matching the gun coordinates.
 - **Speed (units/s):** flight speed from 0.5–100 scene units per second. Changes apply immediately to every flying and queued drone as you adjust the control, without launching another swarm.
 - **Clear drones:** cancels pending launches, removes current flights and effects, and resets the kill and impact counters.
 
@@ -70,7 +69,7 @@ A hit removes both airframe instances and the radar target immediately, bursts f
 
 ## Sound
 
-Sound is enabled by default at 65% volume. Click, tap, or press a key to activate browser audio. The **Sound** folder provides **Sound on**, **Volume (%)**, an **Audio** status field, and a live **Drone voices** count (up to 24). All samples are bundled locally; playback never contacts an external sound service. Sources and CC0 licenses are listed in [public/audio/CREDITS.txt](public/audio/CREDITS.txt).
+Sound is enabled by default at 65% volume. Click, tap, or press a key to activate browser audio. The **speaker icon** immediately left of the fullscreen button toggles sound on and off, including in fullscreen. Its icon and pressed state show whether sound is enabled. All samples are bundled locally; playback never contacts an external sound service. Sources and CC0 licenses are listed in [public/audio/CREDITS.txt](public/audio/CREDITS.txt).
 
 - **Firing:** a real Phalanx recording, with a sustained 1.2-second section blended over 120 ms into a 1.08-second continuous loop. Correlation-compensated power crossfading avoids a recurring dip or boosted seam. The gun gain is 0.22 (previously 0.45), with a 3.2 kHz low-pass filter to soften the sharp high end and a smoothed attack/release.
 - **Drones:** a gas-powered RC aircraft recording replaces the former revving engine sample, approximating the modeled piston-engine drone. Each audible drone has its own continuous loop, starting offset, pitch (0.88–1.06 before Doppler), level, distance filter, and stereo position. The 2.4-second section uses a 280 ms crossfade, resulting in a 2.12-second loop.
@@ -241,7 +240,8 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `src/camera-views.js` | Free, gun-mounted, and tail-mounted drone cameras, view buttons, and responsive projections |
 | `src/fullscreen-view.js` | Fullscreen entry/exit, unobstructed fallback view, and Escape restoration |
 | `src/api.js` | Radian angle commands, current-angle getters, and firing burst control |
-| `src/scene-gui.js` | Sound and swarm controls, live counts, and development-only gun API controls |
+| `src/scene-gui.js` | Swarm controls, live counts, and development-only gun API controls |
+| `src/sound-toggle.js` | Toolbar sound toggle and synchronization with the scene audio settings |
 | `src/drones.js` | Timed launches, instanced flights, radar snapshots, gun hit detection, destruction, and counters |
 | `src/drone-model.js` | Original merged delta-wing airframe geometry and shared materials |
 | `src/impact-effects.js` | Bounded pools of large fireballs, flame lobes, shockwaves, sparks, smoke, and light |

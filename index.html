@@ -17,6 +17,13 @@
         <button type="button" data-camera-view="free" aria-pressed="true" title="Free orbit camera">Free</button>
         <button type="button" data-camera-view="gun" aria-pressed="false" title="View beside the optical pod over the barrel">Gun</button>
         <button type="button" data-camera-view="drone" aria-pressed="false" title="View from above an incoming drone tail">Drone</button>
+        <button id="toggle-sound" class="sound-toggle" type="button" aria-label="Mute sound" aria-pressed="true" title="Mute sound">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M7 3 3.5 6H1.5v4h2L7 13Z"/>
+            <path class="sound-on" d="M10 5.5a3.5 3.5 0 0 1 0 5m2-7a6 6 0 0 1 0 9"/>
+            <path class="sound-off" d="m10 6 4 4m0-4-4 4"/>
+          </svg>
+        </button>
         <button id="toggle-fullscreen" class="fullscreen-toggle" type="button" aria-label="Enter fullscreen" aria-pressed="false" title="Enter fullscreen">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path class="fullscreen-enter" d="M6 2H2v4m8-4h4v4M2 10v4h4m8-4v4h-4"/>
