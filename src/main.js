@@ -190,7 +190,7 @@ async function start() {
 
   const { createSceneGui } = await import('./scene-gui.js');
   if (disposed) return;
-  sceneGui = createSceneGui({ drones, includeGunControls: import.meta.env.DEV });
+  sceneGui = createSceneGui({ drones });
   if (disposed) return;
 
   codeEditor = createCodeEditor({

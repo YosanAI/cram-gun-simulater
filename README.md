@@ -1,6 +1,6 @@
 # Phalanx — Interactive CIWS
 
-A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, a live radar widget, and sampled sound effects. A dat.gui panel controls drone spawning in every build and also exercises the gun API during development. A sound toggle sits beside the fullscreen button in the camera toolbar.
+A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, a live radar widget, and sampled sound effects. A dat.gui panel controls the gun and drone spawning in every build. A sound toggle sits beside the fullscreen button in the camera toolbar.
 
 ## Run locally
 
@@ -37,7 +37,7 @@ Orbit input applies only to **Free**. All cameras resize with the viewport, keep
 
 Click the **fullscreen icon** at the right of the camera tabs for an unobstructed scene. Only the camera tab bar remains visible; the editor, scene controls, radar, compass, and camera status are hidden. Camera switching and running code continue normally. Click the icon again or press **Escape** to restore the panels and their previous collapse states. Browsers without fullscreen support use the same view within the browser window.
 
-The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, a **Gun API testing** folder above the swarm settings provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
+The top-right dat.gui panel includes gun and **Drone swarm** controls in development and production. The **Gun API testing** folder above the swarm settings provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
 
 ## Drone swarms
 
@@ -248,7 +248,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `src/camera-views.js` | Free, gun-mounted, and tail-mounted drone cameras, view buttons, and responsive projections |
 | `src/fullscreen-view.js` | Fullscreen entry/exit, unobstructed fallback view, and Escape restoration |
 | `src/api.js` | Radian angle commands, current-angle getters, and firing burst control |
-| `src/scene-gui.js` | Swarm controls, live counts, and development-only gun API controls |
+| `src/scene-gui.js` | Gun and swarm controls, plus live counts, in every build |
 | `src/sound-toggle.js` | Toolbar sound toggle and synchronization with the scene audio settings |
 | `src/drones.js` | Timed launches, instanced flights, radar snapshots, gun hit detection, destruction, and counters |
 | `src/drone-model.js` | Original merged delta-wing airframe geometry and shared materials |

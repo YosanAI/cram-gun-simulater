@@ -2,8 +2,8 @@ import { GUI } from 'dat.gui';
 import { ANGLE_LIMITS, setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire } from './api.js';
 import { DEFAULT_SWARM, DRONE_LIMITS } from './drones.js';
 
-/** Swarm controls in every build, with gun API testing controls in development. */
-export function createSceneGui({ drones, includeGunControls = false }) {
+/** Gun and swarm controls in every build. */
+export function createSceneGui({ drones }) {
   const host = document.getElementById('scene-controls');
   const status = document.createElement('output');
   status.className = 'scene-controls-status';
@@ -55,17 +55,13 @@ export function createSceneGui({ drones, includeGunControls = false }) {
     }
   }
 
-  let azimuth;
-  let elevation;
-  if (includeGunControls) {
-    const gun = gui.addFolder('Gun API testing');
-    azimuth = gun.add(values, 'azimuth', 0, Math.PI * 2)
-      .step(0.001).name('Azimuth (rad)').onChange(setAzimuth);
-    elevation = gun.add(values, 'elevation', ANGLE_LIMITS.minElevation, ANGLE_LIMITS.maxElevation)
-      .step(0.001).name('Elevation (rad)').onChange(setElevation);
-    gun.add(values, 'fire').name('Fire');
-    gun.open();
-  }
+  const gun = gui.addFolder('Gun API testing');
+  const azimuth = gun.add(values, 'azimuth', 0, Math.PI * 2)
+    .step(0.001).name('Azimuth (rad)').onChange(setAzimuth);
+  const elevation = gun.add(values, 'elevation', ANGLE_LIMITS.minElevation, ANGLE_LIMITS.maxElevation)
+    .step(0.001).name('Elevation (rad)').onChange(setElevation);
+  gun.add(values, 'fire').name('Fire');
+  gun.open();
 
   const swarm = gui.addFolder('Drone swarm');
   swarm.add(values, 'spawn').name('Spawn swarm');
@@ -97,7 +93,6 @@ export function createSceneGui({ drones, includeGunControls = false }) {
     spawnSwarm: values.spawn,
     sync() {
       updateStatus();
-      if (!includeGunControls) return;
       // Read the public getters without interrupting a drag or numeric edit.
       const focused = document.activeElement;
       if (activePointers.size || (focused?.tagName === 'INPUT' && gui.domElement.contains(focused))) return;
