@@ -122,6 +122,7 @@ export function createSceneGui({ drones, sound, includeGunControls = false }) {
   window.addEventListener('blur', clearInteractions);
 
   return {
+    spawnSwarm: values.spawn,
     sync() {
       updateStatus();
       if (sound && audioValues.status !== sound.getState().status) {

@@ -171,15 +171,16 @@ async function start() {
   if (disposed) return;
   renderer.render(scene, camera);
 
-  codeEditor = createCodeEditor({
-    api: { setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire },
-    onStop: stopInput,
-  });
-
   const { createSceneGui } = await import('./scene-gui.js');
   if (disposed) return;
   sceneGui = createSceneGui({ drones, sound, includeGunControls: import.meta.env.DEV });
   if (disposed) return;
+
+  codeEditor = createCodeEditor({
+    api: { setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire },
+    onStart: sceneGui.spawnSwarm,
+    onStop: stopInput,
+  });
 
   let lastTime = performance.now();
   function animate(now) {

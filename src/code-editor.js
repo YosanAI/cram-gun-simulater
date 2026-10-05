@@ -6,7 +6,7 @@ import { createEditorPanel } from './editor-panel.js';
 import * as THREE from 'three';
 import { CONSOLE_METHODS } from './sandbox-limits.js';
 
-export function createCodeEditor({ api, onStop }) {
+export function createCodeEditor({ api, onStart, onStop }) {
   const panel = document.getElementById('script-panel');
   const toggleButton = document.getElementById('toggle-script');
   const status = document.getElementById('script-status');
@@ -18,6 +18,7 @@ export function createCodeEditor({ api, onStop }) {
   }
 
   const runner = createSimulationRunner(api, {
+    onStart,
     onStop,
     onStateChange(running, phase) {
       toggleButton.textContent = running ? 'Stop' : 'Run';

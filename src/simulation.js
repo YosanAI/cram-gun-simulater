@@ -8,6 +8,7 @@ const defaultWorker = () => new Worker(new URL('./sandbox.worker.js', import.met
 export function createSimulationRunner(api, {
   onStateChange = () => {},
   onError = () => {},
+  onStart = () => {},
   onStop = () => {},
   onLog = entry => console[entry.level]('[updateGun]', entry.message),
   createWorker = defaultWorker,
@@ -79,6 +80,7 @@ export function createSimulationRunner(api, {
       } else if (message?.type === 'ready' && !ready) {
         clearTimeout(watchdog);
         ready = true;
+        onStart();
         onStateChange(true, 'running');
       } else if (message?.type === 'frame' && ready && pendingId !== null && message.id === pendingId) {
         // Validate the whole batch before allowing any command to touch the app.

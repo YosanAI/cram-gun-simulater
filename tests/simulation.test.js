@@ -77,6 +77,56 @@ test('the empty template runs in a real worker and idle frames execute no code',
   assert.deepEqual(h.errors, []);
 });
 
+test('successful startup triggers the start callback once per run, before frame updates', t => {
+  const instances = [];
+  let starts = 0;
+  const h = createHarness(t, {
+    onStart: () => { starts++; },
+    createWorker: () => {
+      const instance = { postMessage() {}, terminate() {} };
+      instances.push(instance);
+      return instance;
+    },
+  });
+  h.runner.run(DEFAULT_CODE);
+  assert.equal(starts, 0);
+  instances[0].onmessage({ data: { type: 'ready' } });
+  assert.equal(starts, 1);
+  h.runner.tick(0.02);
+  instances[0].onmessage({ data: { type: 'frame', id: 1, commands: [] } });
+  assert.equal(starts, 1);
+
+  const deliverOldMessage = instances[0].onmessage;
+  h.runner.stop();
+  h.runner.run(DEFAULT_CODE);
+  deliverOldMessage({ data: { type: 'ready' } });
+  assert.equal(starts, 1);
+  instances[1].onmessage({ data: { type: 'ready' } });
+  assert.equal(starts, 2);
+  assert.deepEqual(h.errors, []);
+});
+
+test('failed or cancelled startup never triggers the start callback', t => {
+  let instance;
+  let starts = 0;
+  const h = createHarness(t, {
+    onStart: () => { starts++; },
+    createWorker: () => (instance = { postMessage() {}, terminate() {} }),
+  });
+  h.runner.run(DEFAULT_CODE);
+  instance.onmessage({ data: { type: 'error', error: { name: 'SyntaxError', message: 'Invalid script' } } });
+  assert.equal(starts, 0);
+  assert.equal(h.runner.isRunning(), false);
+  assert.equal(h.errors[0].name, 'SyntaxError');
+
+  h.runner.run(DEFAULT_CODE);
+  const deliverCancelledMessage = instance.onmessage;
+  h.runner.stop();
+  deliverCancelledMessage({ data: { type: 'ready' } });
+  assert.equal(starts, 0);
+  assert.equal(h.runner.isRunning(), false);
+});
+
 test('frame timing and all five gun functions pass through the isolated API bridge', async t => {
   const h = createHarness(t);
   assert.equal(await h.run('function updateGun(t, dt) { setAzimuth(getCurrentAzimuth()+t); setElevation(getCurrentElevation()+dt); fire(); }'), true);
