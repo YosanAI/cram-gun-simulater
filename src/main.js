@@ -8,6 +8,7 @@ import { createCodeEditor } from './code-editor.js';
 import { createDroneSwarm } from './drones.js';
 import { createRadar } from './radar.js';
 import { createSceneAudio } from './audio.js';
+import { createCameraViews } from './camera-views.js';
 import {
   setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
   advanceMotion, getSceneState, stopFiring,
@@ -83,33 +84,40 @@ async function start() {
     sound.stopFiring();
   }
 
+  // Keep the original free-view framing and its independent orbit controls.
+  camera.position.set(7.1, 4.7 + MOUNT_SURFACE_Y, 8.8);
+  controls.target.set(0, 1.95 + MOUNT_SURFACE_Y, 0.5);
+  controls.update();
+  const cameraViews = createCameraViews({
+    freeCamera: camera, controls, opticalSensor: model.opticalSensor,
+    tabs: document.getElementById('camera-view-tabs'),
+    status: document.getElementById('camera-view-status'), viewport,
+  });
+
   function resize() {
     const width = Math.max(1, viewport.clientWidth);
     const height = Math.max(1, viewport.clientHeight);
     renderer.setSize(width, height, false);
-    camera.aspect = width / height;
-    // A wider portrait field of view preserves the full mount and muzzle.
-    camera.fov = camera.aspect < 1 ? 49 : 38;
-    camera.updateProjectionMatrix();
+    cameraViews.resize(width / height);
   }
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(viewport);
   resize();
 
-  // Keep the original perspective camera framing.
-  camera.position.set(7.1, 4.7 + MOUNT_SURFACE_Y, 8.8);
-  controls.target.set(0, 1.95 + MOUNT_SURFACE_Y, 0.5);
-  controls.update();
-
+  const compassDirection = new THREE.Vector3();
   function updateCompass() {
-    const cameraBearing = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z) / DEG;
-    compassArrow.setAttribute('transform', `rotate(${180 - cameraBearing} 26 26)`);
+    cameraViews.getCamera().getWorldDirection(compassDirection);
+    // A vertical drone view has no horizontal bearing; keep the last heading.
+    if (Math.hypot(compassDirection.x, compassDirection.z) < 0.001) return;
+    const cameraBearing = Math.atan2(compassDirection.x, compassDirection.z) / DEG;
+    compassArrow.setAttribute('transform', `rotate(${-cameraBearing} 26 26)`);
   }
   updateCompass();
 
   window.phalanx = Object.freeze({
     setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
-    model, scene, camera,
+    model, scene,
+    get camera() { return cameraViews.getCamera(); },
     sound: Object.freeze({ setEnabled: sound.setEnabled, setVolume: sound.setVolume, getState: sound.getState }),
     getState: getSceneState,
     getStats: () => ({ ...model.getStats(), drawCalls: renderer.info.render.calls, renderedTriangles: renderer.info.render.triangles }),
@@ -138,6 +146,7 @@ async function start() {
     window.removeEventListener('pageshow', onPageShow);
     sceneGui?.destroy();
     codeEditor?.destroy();
+    cameraViews.destroy();
     scene.remove(axes);
     axes.dispose();
     effects.dispose();
@@ -169,7 +178,9 @@ async function start() {
     try { await renderer.compileAsync(scene, camera); } catch { renderer.compile(scene, camera); }
   } else renderer.compile(scene, camera);
   if (disposed) return;
-  renderer.render(scene, camera);
+  cameraViews.update(0, drones.getRadarData());
+  updateCompass();
+  renderer.render(scene, cameraViews.getCamera());
 
   const { createSceneGui } = await import('./scene-gui.js');
   if (disposed) return;
@@ -203,11 +214,11 @@ async function start() {
     sound.update({ firing: state.firing, drive: state.drive, deltaTime: dt, radarData });
     radar.update(dt, state.azimuth * DEG, radarData, drones.getState());
 
-    controls.update(dt);
     scene.updateMatrixWorld();
+    cameraViews.update(dt, radarData);
     updateCompass();
     sceneGui.sync();
-    renderer.render(scene, camera);
+    renderer.render(scene, cameraViews.getCamera());
   }
   frameId = requestAnimationFrame(animate);
 

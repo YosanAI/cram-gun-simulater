@@ -13,6 +13,7 @@ body {
 
 .stage {
   --radar-width: 260px;
+  --controls-top: 20px;
   position: relative;
   width: 100%;
   height: 100dvh;
@@ -32,6 +33,63 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+.camera-views {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  z-index: 4;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+}
+
+.camera-view-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #415c6670;
+  border-radius: 0 0 7px 7px;
+  background: #101b24ed;
+  box-shadow: 0 6px 20px #0005;
+}
+
+.camera-view-tabs button {
+  min-width: 58px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #93adb7;
+  font: 600 12px system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.camera-view-tabs button:hover {
+  background: #263d48;
+  color: #e5f3ee;
+}
+
+.camera-view-tabs button[aria-pressed="true"] {
+  background: #a6dbbe;
+  color: #10251b;
+}
+
+.camera-view-tabs button:focus-visible {
+  outline: 2px solid #d7f3e1;
+  outline-offset: 2px;
+}
+
+.camera-view-status {
+  display: block;
+  margin-top: 3px;
+  color: #c1d8cf;
+  font-size: 10px;
+  text-shadow: 0 1px 4px #000;
+  pointer-events: none;
 }
 
 .orientation {
@@ -64,10 +122,10 @@ body {
 
 .scene-controls {
   position: absolute;
-  top: 20px;
+  top: var(--controls-top);
   right: 20px;
   width: min(280px, calc(100vw - 24px));
-  max-height: max(64px, calc(100dvh - var(--radar-panel-height, 326px) - 60px));
+  max-height: max(64px, calc(100dvh - var(--radar-panel-height, 326px) - var(--controls-top) - 40px));
   overflow: auto;
   z-index: 3;
   border-radius: 6px;
@@ -198,7 +256,7 @@ body {
 .script-panel {
   --panel-inset: 20px;
   --panel-right-inset: 360px;
-  --panel-top-inset: 20px;
+  --panel-top-inset: 100px;
   position: absolute;
   left: var(--panel-inset);
   bottom: var(--panel-inset);
@@ -399,6 +457,7 @@ body {
 @media (max-width: 900px) {
   .stage {
     --radar-width: clamp(140px, calc(100dvh - var(--editor-panel-height, min(420px, 60dvh)) - 210px), 200px);
+    --controls-top: 80px;
   }
 
   .radar-widget {
@@ -412,7 +471,7 @@ body {
   }
 
   .scene-controls {
-    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(420px, 60dvh)) - var(--radar-panel-height, 230px) - 60px));
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(420px, 60dvh)) - var(--radar-panel-height, 230px) - var(--controls-top) - 40px));
   }
 
   .script-panel {
@@ -432,10 +491,13 @@ body {
 }
 
 @media (max-width: 600px) {
+  .stage {
+    --controls-top: 76px;
+  }
+
   .scene-controls {
-    top: 12px;
     right: 12px;
-    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(350px, 48dvh)) - var(--radar-panel-height, 230px) - 52px));
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(350px, 48dvh)) - var(--radar-panel-height, 230px) - var(--controls-top) - 40px));
   }
 
   .script-panel {
@@ -483,7 +545,7 @@ body {
     left: 12px;
     right: auto;
     width: min(280px, calc(100vw - var(--radar-width) - 44px));
-    max-height: max(64px, calc(100dvh - var(--editor-panel-height, 260px) - 114px));
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, 260px) - var(--controls-top) - 102px));
   }
 }
 
@@ -499,10 +561,10 @@ body {
 
   .script-panel {
     --panel-right-inset: 240px;
-    --panel-top-inset: 20px;
+    --panel-top-inset: 100px;
   }
 
   .scene-controls {
-    max-height: max(64px, calc(100dvh - var(--radar-panel-height, 210px) - 60px));
+    max-height: max(64px, calc(100dvh - var(--radar-panel-height, 210px) - var(--controls-top) - 40px));
   }
 }

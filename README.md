@@ -27,7 +27,13 @@ Three.js is installed through npm and pinned to **0.180.0**. Vite resolves its i
 
 ## Controls
 
-Drag the scene to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. The compass follows the camera orientation.
+Use the compact **Free / Gun / Drone** switcher, flush with the top edge at the center, to choose the camera:
+
+- **Free:** the original orbit view. Drag to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. Its camera and orbit target are preserved while using other views.
+- **Gun:** looks forward from just ahead of the optical lenses, shifted inboard and down to sit above the receiver with most of the barrel visible. This keeps the optical housing behind and beside the camera, clear of the sightline. The camera mount follows the sensor's actual world position and orientation through azimuth and elevation, independently of barrel spin. It sits above and beside the barrel, so there is natural aiming parallax.
+- **Drone:** an onboard camera above the tail, tilted down by 10° to look forward over the visible fuselage and wings toward the gun. Its mounting offset rotates with the airframe rather than staying vertically above it in world space. It follows the first active drone and keeps that ID until it is destroyed or impacts, then switches to another live drone. If none are active, the view holds its last pose and displays **Waiting for a drone…**, then follows the next launch automatically. The current drone ID appears below the switcher.
+
+Orbit input applies only to **Free**. All cameras resize with the viewport, keep the 6,000-unit far plane, and use a wider portrait field of view. The compass follows the active camera orientation. Switching views does not change the gun controller or the listener at the gun origin. On smaller screens, scene controls sit below the camera switcher.
 
 The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, an additional **Gun API testing** folder provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
 
@@ -196,7 +202,7 @@ The fixed scene origin `(0, 0, 0)` is the **intersection of the azimuth and elev
 
 The complete cannon assembly (receiver, magazine, barrel brace, rotor, and muzzle anchor) is raised **0.065 scene units** relative to the elevation cradle, canceling its previous downward offset. Both joint placements and the existing rotation behavior are preserved. The elevation axis still turns with azimuth, and both axes always cross at the fixed origin. The barrel assembly's extended centerline passes through that origin at every azimuth and elevation, including while the rotor spins. The barrel's rear face remains forward of the pivot; its center moves as the gun turns.
 
-Drone spawning, flight destinations, radar positions, and scalar distances all use this same fixed origin. Gun angle conventions are unchanged, so a target's direction from the origin directly yields `Math.atan2(x, z)` for azimuth and `Math.atan2(y, Math.hypot(x, z))` for elevation. The camera is independent of the turret, so dragging the view never changes the gun's azimuth or elevation.
+Drone spawning, flight destinations, radar positions, and scalar distances all use this same fixed origin. Gun angle conventions are unchanged, so a target's direction from the origin directly yields `Math.atan2(x, z)` for azimuth and `Math.atan2(y, Math.hypot(x, z))` for elevation. Dragging the free camera never changes the gun's azimuth or elevation; gun and drone cameras follow their associated scene objects.
 
 The visual hierarchy is:
 
@@ -225,9 +231,10 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 
 | File | Responsibility |
 | --- | --- |
-| `index.html` | Scene, compass, code-editor panel, and Vite entry point |
-| `styles.css` | Scene, compass, and editor layout |
+| `index.html` | Scene, camera switcher, compass, code-editor panel, and Vite entry point |
+| `styles.css` | Scene, camera switcher, compass, and editor layout |
 | `src/main.js` | Existing scene setup, orbit controls, compass, lifecycle, and render loop |
+| `src/camera-views.js` | Free, gun-mounted, and tail-mounted drone cameras, view buttons, and responsive projections |
 | `src/api.js` | Radian angle commands, current-angle getters, and firing burst control |
 | `src/scene-gui.js` | Sound and swarm controls, live counts, and development-only gun API controls |
 | `src/drones.js` | Timed launches, instanced flights, radar snapshots, gun hit detection, destruction, and counters |
@@ -252,12 +259,13 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `tests/simulation.test.js` | Actual worker execution, API integration, error recovery, isolation, and resource limits |
 | `tests/drones.test.js` | Spawn bounds, launch/impact spacing, frame timing, queue cancellation, effects, and disposal |
 | `tests/audio.test.js` | Audio activation, sample preparation, distance, event classification, voice limits, and cleanup |
+| `tests/camera-views.test.js` | Gun pose/barrel framing, retained free view, tail mounting/airframe visibility, target replacement, waiting, projection resizing, and button cleanup |
 | `tests/effects.test.js` | Tracer speed/lifetime, retained launch direction, bounded visual pools, and resource disposal |
 | `public/three-LICENSE.txt` | Three.js MIT license, copied into the production build |
 | `package.json` / `package-lock.json` | npm scripts and reproducible dependency versions |
 | `dist/` | Generated production output; run `npm run build` to create it |
 
-The app also retains `window.phalanx.getState()` and `window.phalanx.getStats()` for inspection in browser developer tools, plus references to the model, scene, and camera.
+The app also retains `window.phalanx.getState()` and `window.phalanx.getStats()` for inspection in browser developer tools, plus references to the model, scene, and the currently active camera through `window.phalanx.camera`.
 
 ## Scope and accuracy
 

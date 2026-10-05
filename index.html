@@ -12,6 +12,14 @@
 <body>
   <main class="stage" aria-label="Interactive Phalanx 3D viewer">
     <div id="viewport" tabindex="0" aria-label="3D scene. Drag to orbit, scroll or pinch to zoom, right-drag to pan."></div>
+    <div class="camera-views">
+      <nav id="camera-view-tabs" class="camera-view-tabs" aria-label="Camera view">
+        <button type="button" data-camera-view="free" aria-pressed="true" title="Free orbit camera">Free</button>
+        <button type="button" data-camera-view="gun" aria-pressed="false" title="View beside the optical pod over the barrel">Gun</button>
+        <button type="button" data-camera-view="drone" aria-pressed="false" title="View from above an incoming drone tail">Drone</button>
+      </nav>
+      <output id="camera-view-status" class="camera-view-status" role="status" aria-live="polite">Orbit · pan · zoom</output>
+    </div>
     <div class="orientation" aria-hidden="true">
       <span class="orientation-n">N</span>
       <svg viewBox="0 0 52 52">

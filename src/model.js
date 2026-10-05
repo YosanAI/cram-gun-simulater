@@ -564,6 +564,8 @@ function buildOpticalPod(b, m) {
   b.cable('Optical sensor cable loop', [[0.98, 0.83, -0.175], [1.09, 0.66, -0.31], [0.99, 0.46, -0.37], [0.68, 0.39, -0.54], [0.56, 0.46, -0.61]], 0.026, m.rubber, 48);
   b.cylinder('Optical cable rear gland', 0.045, 0.07, [0.98, 0.855, -0.226], m.steel, 'z', 20);
   label(b, 'OPTICS', 'BLOCK 1B', [0.21, 0.079], [1.192, 1.136, 0.067], [0, PI / 2, 0]);
+  // Just beyond the main lens and retaining ring, facing local +Z.
+  return anchor(b.parent, 'Optical sensor camera anchor', [lenses[0].x, lenses[0].y, 0.52]);
 }
 
 function buildExternalDetails(b, m, cannon = b) {
@@ -632,7 +634,7 @@ export function createPhalanx() {
   buildReceiverAndMagazine(cannonBuilder, materials);
   buildBarrelBrace(cannonBuilder, materials);
   buildRotatingBarrels(barrelBuilder, materials);
-  buildOpticalPod(elevationBuilder, materials);
+  const opticalSensor = buildOpticalPod(elevationBuilder, materials);
   buildExternalDetails(elevationBuilder, materials, cannonBuilder);
 
   fixedBuilder.finish();
@@ -695,5 +697,5 @@ export function createPhalanx() {
     return { meshes, triangles: Math.round(triangles) };
   }
 
-  return { root, origin, azimuth, elevation, cannon, barrels, muzzle, hotspots, setWireframe, getStats };
+  return { root, origin, azimuth, elevation, cannon, barrels, muzzle, opticalSensor, hotspots, setWireframe, getStats };
 }
