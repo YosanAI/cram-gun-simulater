@@ -17,6 +17,12 @@
         <button type="button" data-camera-view="free" aria-pressed="true" title="Free orbit camera">Free</button>
         <button type="button" data-camera-view="gun" aria-pressed="false" title="View beside the optical pod over the barrel">Gun</button>
         <button type="button" data-camera-view="drone" aria-pressed="false" title="View from above an incoming drone tail">Drone</button>
+        <button id="toggle-fullscreen" class="fullscreen-toggle" type="button" aria-label="Enter fullscreen" aria-pressed="false" title="Enter fullscreen">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path class="fullscreen-enter" d="M6 2H2v4m8-4h4v4M2 10v4h4m8-4v4h-4"/>
+            <path class="fullscreen-exit" d="M2 6h4V2m4 0v4h4M6 14v-4H2m12 0h-4v4"/>
+          </svg>
+        </button>
       </nav>
       <output id="camera-view-status" class="camera-view-status" role="status" aria-live="polite">Orbit · pan · zoom</output>
     </div>
@@ -32,17 +38,22 @@
       </svg>
     </div>
     <aside id="scene-controls" class="scene-controls" aria-label="Drone swarm and scene controls"></aside>
-    <section id="radar-widget" class="radar-widget" aria-labelledby="radar-title">
+    <section id="radar-widget" class="radar-widget" aria-labelledby="radar-title" data-collapsed="false">
       <header class="radar-header">
         <h2 id="radar-title"><span class="radar-live-dot" aria-hidden="true"></span>RADAR</h2>
         <span id="radar-count">0 live / 0 queued</span>
+        <button id="toggle-radar" class="radar-collapse" type="button" aria-label="Collapse radar" aria-expanded="true" aria-controls="radar-body" title="Collapse radar">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+        </button>
       </header>
-      <div class="radar-screen">
-        <canvas id="radar-canvas" role="img" aria-label="Drone radar, north up, gun at center.">Live drone radar</canvas>
+      <div id="radar-body" class="radar-body">
+        <div class="radar-screen">
+          <canvas id="radar-canvas" role="img" aria-label="Drone radar, north up, gun at center.">Live drone radar</canvas>
+        </div>
+        <div class="radar-footer"><span id="radar-range">RNG 50 u</span><span>NORTH UP · X/Z</span></div>
+        <output id="radar-kills" class="radar-kills" aria-label="Drones killed">0 killed</output>
+        <output id="radar-detail" class="radar-detail">Airspace clear</output>
       </div>
-      <div class="radar-footer"><span id="radar-range">RNG 50 u</span><span>NORTH UP · X/Z</span></div>
-      <output id="radar-kills" class="radar-kills" aria-label="Drones killed">0 killed</output>
-      <output id="radar-detail" class="radar-detail">Airspace clear</output>
     </section>
     <section id="script-panel" class="script-panel" aria-labelledby="script-title" data-running="false" data-collapsed="false">
       <button id="resize-editor" class="script-resize" type="button" aria-label="Resize editor" title="Drag to resize; arrow keys adjust size">

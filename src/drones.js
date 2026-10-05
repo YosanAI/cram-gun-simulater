@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { createDroneAirframe } from './drone-model.js';
 import { createImpactEffects } from './impact-effects.js';
 
-export const DRONE_LIMITS = Object.freeze({ maxActive: 200, minRadius: 5, maxRadius: 200, minSpeed: 0.5, maxSpeed: 20, minSpawnInterval: 0.1, maxSpawnInterval: 10 });
-export const DEFAULT_SWARM = Object.freeze({ count: 12, minRadius: 20, maxRadius: 40, speed: 4, spawnInterval: 0.8, randomDirections: true, azimuth: 0, elevation: Math.PI / 6 });
+export const DRONE_LIMITS = Object.freeze({ maxActive: 200, minRadius: 5, maxRadius: 200, minSpeed: 0.5, maxSpeed: 100, minSpawnInterval: 0.1, maxSpawnInterval: 10 });
+export const DEFAULT_SWARM = Object.freeze({ count: 12, minRadius: 20, maxRadius: 40, speed: 10, spawnInterval: 0.8, randomDirections: true, azimuth: 0, elevation: Math.PI / 6 });
 // Deliberately simple gameplay hit volumes and range, in scene units.
 export const GUN_HIT_LIMITS = Object.freeze({ radius: 1.5, range: 250 });
 const ORIGIN = new THREE.Vector3();
@@ -11,9 +11,16 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCALE = new THREE.Vector3(1, 1, 1);
 const IMPACT_DISTANCE = 1.5; // The nose reaches the fixed gun pivot here.
 
+function validateSpeed(speed) {
+  if (!Number.isFinite(speed)) throw new TypeError('speed must be a finite number.');
+  if (speed < DRONE_LIMITS.minSpeed || speed > DRONE_LIMITS.maxSpeed) {
+    throw new RangeError('Drone speed must be between ' + DRONE_LIMITS.minSpeed + ' and ' + DRONE_LIMITS.maxSpeed + ' units/s.');
+  }
+}
+
 function validateOptions(options) {
   const settings = { ...DEFAULT_SWARM, ...options };
-  for (const name of ['count', 'minRadius', 'maxRadius', 'speed', 'spawnInterval', 'azimuth', 'elevation']) {
+  for (const name of ['count', 'minRadius', 'maxRadius', 'spawnInterval', 'azimuth', 'elevation']) {
     if (!Number.isFinite(settings[name])) throw new TypeError(name + ' must be a finite number.');
   }
   if (!Number.isInteger(settings.count) || settings.count < 1 || settings.count > DRONE_LIMITS.maxActive) {
@@ -22,7 +29,7 @@ function validateOptions(options) {
   if (settings.minRadius < DRONE_LIMITS.minRadius || settings.maxRadius > DRONE_LIMITS.maxRadius || settings.minRadius > settings.maxRadius) {
     throw new RangeError('Spawn radii must be ordered between ' + DRONE_LIMITS.minRadius + ' and ' + DRONE_LIMITS.maxRadius + '.');
   }
-  if (settings.speed < DRONE_LIMITS.minSpeed || settings.speed > DRONE_LIMITS.maxSpeed) throw new RangeError('Drone speed is outside the allowed range.');
+  validateSpeed(settings.speed);
   if (settings.spawnInterval < DRONE_LIMITS.minSpawnInterval || settings.spawnInterval > DRONE_LIMITS.maxSpawnInterval) {
     throw new RangeError('Spawn interval must be between 0.1 and 10 seconds.');
   }
@@ -110,6 +117,12 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
   }
 
   return {
+    setSpeed(speed) {
+      if (disposed) throw new Error('The drone swarm has been disposed.');
+      validateSpeed(speed);
+      for (const drone of drones) drone.speed = speed;
+      for (const entry of pending) entry.drone.speed = speed;
+    },
     queueSwarm(options = {}) {
       if (disposed) throw new Error('The drone swarm has been disposed.');
       const settings = validateOptions(options);

@@ -9,6 +9,7 @@ import { createDroneSwarm } from './drones.js';
 import { createRadar } from './radar.js';
 import { createSceneAudio } from './audio.js';
 import { createCameraViews } from './camera-views.js';
+import { createFullscreenView } from './fullscreen-view.js';
 import {
   setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
   advanceMotion, getSceneState, stopFiring,
@@ -93,6 +94,7 @@ async function start() {
     tabs: document.getElementById('camera-view-tabs'),
     status: document.getElementById('camera-view-status'), viewport,
   });
+  const fullscreenView = createFullscreenView(viewport.parentElement, document.getElementById('toggle-fullscreen'));
 
   function resize() {
     const width = Math.max(1, viewport.clientWidth);
@@ -146,6 +148,7 @@ async function start() {
     window.removeEventListener('pageshow', onPageShow);
     sceneGui?.destroy();
     codeEditor?.destroy();
+    fullscreenView.destroy();
     cameraViews.destroy();
     scene.remove(axes);
     axes.dispose();

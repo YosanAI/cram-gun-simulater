@@ -4,6 +4,8 @@ const MIN_RANGE = 50;
 /** Read-only north-up radar, drawn alongside the scene's animation loop. */
 export function createRadar() {
   const panel = document.getElementById('radar-widget');
+  const body = document.getElementById('radar-body');
+  const collapseButton = document.getElementById('toggle-radar');
   const canvas = document.getElementById('radar-canvas');
   const count = document.getElementById('radar-count');
   const rangeLabel = document.getElementById('radar-range');
@@ -104,6 +106,17 @@ export function createRadar() {
     pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
   function leavePointer() { pointer = null; }
+  function toggleCollapsed() {
+    const collapsed = panel.dataset.collapsed !== 'true';
+    panel.dataset.collapsed = String(collapsed);
+    body.hidden = collapsed;
+    collapseButton.setAttribute('aria-expanded', String(!collapsed));
+    collapseButton.setAttribute('aria-label', collapsed ? 'Expand radar' : 'Collapse radar');
+    collapseButton.title = collapsed ? 'Expand radar' : 'Collapse radar';
+    pointer = null;
+    resize();
+  }
+  collapseButton.addEventListener('click', toggleCollapsed);
   canvas.addEventListener('pointermove', movePointer);
   canvas.addEventListener('pointerdown', movePointer);
   canvas.addEventListener('pointerleave', leavePointer);
@@ -132,7 +145,9 @@ export function createRadar() {
       }
       const liveIds = new Set(snapshot.map(drone => drone.id));
       for (const id of tracks.keys()) if (!liveIds.has(id)) tracks.delete(id);
-      if (!context || !gridContext || !size) {
+      // Keep the header counts live while collapsed or hidden in fullscreen.
+      if (body.hidden || !size) return;
+      if (!context || !gridContext) {
         setDetail('Radar display unavailable');
         return;
       }
@@ -234,6 +249,7 @@ export function createRadar() {
       if (disposed) return;
       disposed = true;
       resizeObserver.disconnect();
+      collapseButton.removeEventListener('click', toggleCollapsed);
       canvas.removeEventListener('pointermove', movePointer);
       canvas.removeEventListener('pointerdown', movePointer);
       canvas.removeEventListener('pointerleave', leavePointer);

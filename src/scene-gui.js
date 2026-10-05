@@ -92,7 +92,7 @@ export function createSceneGui({ drones, sound, includeGunControls = false }) {
   const randomDirections = swarm.add(values, 'randomDirections').name('Random directions');
   const spawnAzimuth = swarm.add(values, 'spawnAzimuth', 0, 360).step(1).name('Azimuth (°)');
   const spawnElevation = swarm.add(values, 'spawnElevation', 0, 90).step(1).name('Elevation (°)');
-  swarm.add(values, 'speed', DRONE_LIMITS.minSpeed, DRONE_LIMITS.maxSpeed).step(0.5).name('Speed (units/s)');
+  swarm.add(values, 'speed', DRONE_LIMITS.minSpeed, DRONE_LIMITS.maxSpeed).step(0.5).name('Speed (units/s)').onChange(value => drones.setSpeed(value));
   function syncDirectionControls() {
     for (const controller of [spawnAzimuth, spawnElevation]) {
       controller.domElement.classList.toggle('controls-disabled', values.randomDirections);

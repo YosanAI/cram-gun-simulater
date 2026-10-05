@@ -56,9 +56,9 @@ test('fixed bearings match the gun coordinates, including horizon and overhead',
 
 test('drones keep their nose toward the origin and advance at the configured speed', t => {
   const { scene, swarm } = harness(t);
-  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, speed: 4 });
+  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, speed: 20 });
   const before = swarm.getDrones()[0];
-  swarm.update(0.5);
+  swarm.update(0.1);
   const after = swarm.getDrones()[0];
   assert.ok(Math.abs(before.position.distanceTo(after.position) - 2) < 1e-10);
   assert.ok(Math.abs(after.position.length() - 18) < 1e-10);
@@ -69,6 +69,61 @@ test('drones keep their nose toward the origin and advance at the configured spe
   // Inspection data must not permit external code to move live drones.
   after.position.set(0, 0, 0);
   assert.ok(swarm.getDrones()[0].position.length() > 17);
+});
+
+test('speed accepts 0.5–100 units/s and defaults to 10 units/s', t => {
+  const { swarm } = harness(t);
+  for (const speed of [undefined, 0.5, 100]) {
+    swarm.clear();
+    swarm.queueSwarm({ count: 1, minRadius: 100, maxRadius: 100, ...(speed === undefined ? {} : { speed }) });
+    swarm.update(0.1);
+    assert.ok(Math.abs(swarm.getDrones()[0].position.length() - (100 - (speed ?? 10) * 0.1)) < 1e-9);
+  }
+});
+
+test('speed changes immediately affect all flying and queued drones without resetting their flights', t => {
+  const { swarm } = harness(t);
+  const ids = swarm.queueSwarm({ count: 3, minRadius: 100, maxRadius: 100, speed: 15, spawnInterval: 0.5 });
+  swarm.update(0.6);
+  const before = swarm.getDrones();
+  const state = swarm.getState();
+  assert.equal(state.active, 2);
+  assert.equal(state.queued, 1);
+
+  swarm.setSpeed(100);
+  assert.deepEqual(swarm.getDrones(), before, 'changing speed must preserve positions, headings, and IDs');
+  assert.deepEqual(swarm.getState(), state);
+  swarm.update(0.1);
+  swarm.getDrones().forEach((drone, index) => {
+    assert.ok(Math.abs(before[index].position.distanceTo(drone.position) - 10) < 1e-9);
+  });
+
+  swarm.update(0.4);
+  assert.deepEqual(swarm.getDrones().map(drone => drone.id), ids);
+  assert.ok(Math.abs(swarm.getDrones()[2].position.length() - 90) < 1e-9, 'the queued drone must launch at the new speed on its original schedule');
+
+  const fastPositions = swarm.getDrones();
+  swarm.setSpeed(0.5);
+  swarm.update(0.1);
+  swarm.getDrones().forEach((drone, index) => {
+    assert.ok(Math.abs(fastPositions[index].position.distanceTo(drone.position) - 0.05) < 1e-9);
+  });
+});
+
+test('invalid live speed changes leave both flying and queued drone speeds unchanged', t => {
+  const { swarm } = harness(t);
+  swarm.queueSwarm({ count: 2, minRadius: 100, maxRadius: 100, speed: 15, spawnInterval: 0.5 });
+  const before = swarm.getDrones();
+  const state = swarm.getState();
+  for (const speed of [0.4, 100.1, NaN, Infinity, '10', null]) {
+    assert.throws(() => swarm.setSpeed(speed));
+    assert.deepEqual(swarm.getDrones(), before);
+    assert.deepEqual(swarm.getState(), state);
+  }
+  swarm.update(0.6);
+  const drones = swarm.getDrones();
+  assert.ok(Math.abs(drones[0].position.length() - 91) < 1e-9);
+  assert.ok(Math.abs(drones[1].position.length() - 98.5) < 1e-9);
 });
 
 test('crossing the origin triggers one impact, removes the drone, and lets the explosion expire', t => {
@@ -95,7 +150,7 @@ test('invalid settings or capacity overflow reject a whole spawn without changin
   for (const settings of [
     { count: 0 }, { count: 1.5 }, { count: NaN }, { count: '2' },
     { count: DRONE_LIMITS.maxActive }, { minRadius: 40, maxRadius: 20 },
-    { minRadius: 0 }, { maxRadius: 201 }, { speed: Infinity }, { speed: 0 },
+    { minRadius: 0 }, { maxRadius: 201 }, { speed: Infinity }, { speed: 0 }, { speed: 0.4 }, { speed: 100.1 },
     { elevation: -1 }, { elevation: Math.PI }, { azimuth: '1' }, { randomDirections: 'yes' },
     { spawnInterval: 0 }, { spawnInterval: -1 }, { spawnInterval: 11 },
     { spawnInterval: NaN }, { spawnInterval: '0.8' },
@@ -138,6 +193,7 @@ test('disposal frees shared resources once and preserves other scene objects', t
   assert.deepEqual(scene.children, [unrelated]);
   for (const resource of resources) assert.equal(disposals.get(resource), 1);
   assert.throws(() => swarm.queueSwarm(), /disposed/);
+  assert.throws(() => swarm.setSpeed(25), /disposed/);
 });
 
 test('impact particles fade and the bounded pool can be reused', t => {
@@ -163,18 +219,18 @@ test('impact particles fade and the bounded pool can be reused', t => {
 test('equal-distance drones launch and impact at the selected interval', t => {
   const hits = [];
   const { swarm } = harness(t, { onImpact: hit => hits.push(hit) });
-  const ids = swarm.queueSwarm({ count: 3, minRadius: 10, maxRadius: 10, speed: 4, spawnInterval: 0.5, randomDirections: false });
+  const ids = swarm.queueSwarm({ count: 3, minRadius: 50, maxRadius: 50, speed: 20, spawnInterval: 0.5, randomDirections: false });
   assert.equal(swarm.getState().active, 1);
   assert.equal(swarm.getState().queued, 2);
   swarm.update(0.49);
   assert.equal(swarm.getState().active, 1);
   swarm.update(0.01);
   assert.equal(swarm.getState().active, 2);
-  assert.ok(Math.abs(swarm.getDrones().find(drone => drone.id === ids[1]).position.length() - 10) < 1e-9);
+  assert.ok(Math.abs(swarm.getDrones().find(drone => drone.id === ids[1]).position.length() - 50) < 1e-9);
   swarm.update(0.5);
   assert.equal(swarm.getState().active, 3);
   assert.equal(swarm.getState().queued, 0);
-  swarm.update(1.15);
+  swarm.update(1.45);
   assert.equal(hits.length, 1);
   swarm.update(0.5);
   assert.equal(hits.length, 2);
@@ -187,7 +243,7 @@ test('equal-distance drones launch and impact at the selected interval', t => {
 test('long and short frames produce the same scheduled flight positions', t => {
   const { swarm: longFrames } = harness(t);
   const { swarm: shortFrames } = harness(t);
-  const options = { count: 5, minRadius: 20, maxRadius: 20, speed: 4, spawnInterval: 0.5, randomDirections: false };
+  const options = { count: 5, minRadius: 100, maxRadius: 100, speed: 20, spawnInterval: 0.5, randomDirections: false };
   longFrames.queueSwarm(options);
   shortFrames.queueSwarm(options);
   longFrames.update(2.2);
@@ -197,13 +253,13 @@ test('long and short frames produce the same scheduled flight positions', t => {
   longFrames.getDrones().forEach((drone, index) => {
     assert.ok(drone.position.distanceTo(other[index].position) < 1e-9);
   });
-  assert.ok(Math.abs(longFrames.getDrones().at(-1).position.length() - 19.2) < 1e-9);
+  assert.ok(Math.abs(longFrames.getDrones().at(-1).position.length() - 96) < 1e-9);
 });
 
 test('repeated swarm requests append to the queue without simultaneous launches', t => {
   const { swarm } = harness(t);
-  swarm.queueSwarm({ count: 2, spawnInterval: 0.5 });
-  swarm.queueSwarm({ count: 3, spawnInterval: 0.25 });
+  swarm.queueSwarm({ count: 2, minRadius: 100, maxRadius: 100, spawnInterval: 0.5 });
+  swarm.queueSwarm({ count: 3, minRadius: 100, maxRadius: 100, spawnInterval: 0.25 });
   assert.equal(swarm.getState().active, 1);
   assert.equal(swarm.getState().queued, 4);
   swarm.update(0.5);
@@ -259,12 +315,12 @@ test('large fireballs include layered flames and a growing shockwave, then clean
 
 test('radar snapshots contain only live target IDs, plain positions, and scalar distances', t => {
   const { swarm } = harness(t);
-  const ids = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, speed: 4, randomDirections: false, elevation: 0 });
+  const ids = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, speed: 20, randomDirections: false, elevation: 0 });
   const snapshot = swarm.getRadarData();
   assert.deepEqual(snapshot, [{ id: ids[0], pos: { x: 0, y: 0, z: 10 }, distance: 10 }]);
   snapshot[0].pos.z = 999;
   snapshot.pop();
-  swarm.update(0.5);
+  swarm.update(0.1);
   assert.deepEqual(swarm.getRadarData(), [{ id: ids[0], pos: { x: 0, y: 0, z: 8 }, distance: 8 }]);
   swarm.clear();
   assert.deepEqual(swarm.getRadarData(), []);
@@ -300,8 +356,8 @@ test('a gun hit removes the live drone once, explodes in the air, and counts a k
 
 test('a shot hits only the nearest intersected drone and never destroys queued drones', t => {
   const { swarm } = harness(t);
-  const [farId] = swarm.queueSwarm({ count: 1, minRadius: 30, maxRadius: 30, randomDirections: false, elevation: 0 });
-  const [nearId, queuedId] = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, randomDirections: false, elevation: 0 });
+  const [farId] = swarm.queueSwarm({ count: 1, minRadius: 60, maxRadius: 60, randomDirections: false, elevation: 0 });
+  const [nearId, queuedId] = swarm.queueSwarm({ count: 2, minRadius: 30, maxRadius: 30, randomDirections: false, elevation: 0 });
   swarm.update(0.8);
   const origin = new THREE.Vector3();
   const direction = new THREE.Vector3(0, 0, 1);

@@ -35,6 +35,8 @@ Use the compact **Free / Gun / Drone** switcher, flush with the top edge at the 
 
 Orbit input applies only to **Free**. All cameras resize with the viewport, keep the 6,000-unit far plane, and use a wider portrait field of view. The compass follows the active camera orientation. Switching views does not change the gun controller or the listener at the gun origin. On smaller screens, scene controls sit below the camera switcher.
 
+Click the **fullscreen icon** at the right of the camera tabs for an unobstructed scene. Only the camera tab bar remains visible; the editor, scene controls, radar, compass, and camera status are hidden. Camera switching and running code continue normally. Click the icon again or press **Escape** to restore the panels and their previous collapse states. Browsers without fullscreen support use the same view within the browser window.
+
 The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, an additional **Gun API testing** folder provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
 
 ## Drone swarms
@@ -45,10 +47,10 @@ Each **Run** in the code editor automatically queues a swarm after the first `up
 - **Spawn interval (s):** 0.1–10 seconds between launches. The initial drone launches immediately; subsequent drones appear one at a time. Additional requests join the existing schedule and respect the selected spacing, even if the previous request contained only one drone.
 - **Near radius / Far radius:** minimum and maximum distance from the gun's origin, from 5–200 scene units. Equal values place drones at one exact distance. Adjusting either limit keeps the range ordered.
 - **Random directions:** distributes the swarm across the hemisphere above the origin. Turn this off to choose **Azimuth (°)** from 0–360° and **Elevation (°)** from 0–90° above the horizon. Zero azimuth is +Z; 90° is +X, matching the gun coordinates.
-- **Speed (units/s):** constant flight speed from 0.5–20 scene units per second.
+- **Speed (units/s):** flight speed from 0.5–100 scene units per second. Changes apply immediately to every flying and queued drone as you adjust the control, without launching another swarm.
 - **Clear drones:** cancels pending launches, removes current flights and effects, and resets the kill and impact counters.
 
-New requests add to the existing launch queue; settings are captured for each swarm. The default is 12 drones, 20–40 units away, with random directions, a speed of 4 units/s, and **0.8 seconds between launches**. The panel reports the number in flight, waiting to launch, killed by the gun, and total impacts on the mount. Exceeding capacity displays an error without partially queueing a swarm. Scheduling uses the scene's simulation clock, so hidden pages pause launches as well as flight.
+New requests add to the existing launch queue; spawn settings are captured for each swarm, while speed can be changed live. The default is 12 drones, 20–40 units away, with random directions, a speed of 10 units/s, and **0.8 seconds between launches**. The panel reports the number in flight, waiting to launch, killed by the gun, and total impacts on the mount. Exceeding capacity displays an error without partially queueing a swarm. Scheduling uses the scene's simulation clock, so hidden pages pause launches as well as flight.
 
 The original procedural airframes use a Shahed-inspired delta wing, rounded fuselage, and twin wingtip fins, without propellers. They point along their flight path and fly straight toward the fixed gun origin. When a nose reaches the mount, the drone is removed and a large expanding fireball appears with a white-hot core, turbulent flame lobes, an expanding ground shockwave, sparks, stronger light, and rising smoke. Fireballs last about 1.2 seconds, while smoke fades over 5 seconds. Flights continue independently of the controller script. Airframes use two instanced meshes regardless of swarm size, and impact effects share a pool of at most 32 simultaneous bursts.
 
@@ -86,6 +88,8 @@ For browser-console control, `window.phalanx.sound.setEnabled(boolean)`, `setVol
 The bottom-right radar shows live drone positions in a **north-up X/Z view**, centered on the fixed gun origin. +Z is north (top) and +X is east (right), independent of the camera. A white central arrow follows the gun's current animated azimuth. Green blips have short movement trails and brighten as the scan sweeps past them; nearby drones turn amber. Their positions update every visible scene frame, regardless of the scan angle.
 
 The range starts at 50 scene units and expands in 25-unit steps to include more distant drones. It stays stable while a swarm is in flight or queued, then resets when the airspace is clear. Hover or touch a blip to show its ID, distance from the origin, and height; height is shown separately from the top-down position. Live and queued counts appear in the header. Blips disappear immediately on impact or Clear, and queued drones appear only when launched.
+
+Use the radar header's **chevron** to collapse or expand its display. The compact header keeps live and queued counts current while collapsed. Collapsing does not affect drone flights or the controller's radar data.
 
 The radar uses its own lightweight 2D canvas and receives the same `radarData` snapshot format as the controller. It follows the scene's pause/lifecycle behavior. On smaller screens it shrinks and sits above the editor, with the compass alongside it and the swarm controls scrolling in the remaining space.
 
@@ -235,12 +239,13 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `styles.css` | Scene, camera switcher, compass, and editor layout |
 | `src/main.js` | Existing scene setup, orbit controls, compass, lifecycle, and render loop |
 | `src/camera-views.js` | Free, gun-mounted, and tail-mounted drone cameras, view buttons, and responsive projections |
+| `src/fullscreen-view.js` | Fullscreen entry/exit, unobstructed fallback view, and Escape restoration |
 | `src/api.js` | Radian angle commands, current-angle getters, and firing burst control |
 | `src/scene-gui.js` | Sound and swarm controls, live counts, and development-only gun API controls |
 | `src/drones.js` | Timed launches, instanced flights, radar snapshots, gun hit detection, destruction, and counters |
 | `src/drone-model.js` | Original merged delta-wing airframe geometry and shared materials |
 | `src/impact-effects.js` | Bounded pools of large fireballs, flame lobes, shockwaves, sparks, smoke, and light |
-| `src/radar.js` | Read-only live radar, scan sweep, trails, automatic range, hover details, and canvas lifecycle |
+| `src/radar.js` | Collapsible live radar, scan sweep, trails, automatic range, hover details, and canvas lifecycle |
 | `src/code-editor.js` | CodeMirror JavaScript editor, API completion, Run/Stop toggle, and error status |
 | `src/editor-panel.js` | Pointer/keyboard resizing, collapse/expand behavior, and compass spacing |
 | `src/simulation.js` | Worker lifecycle, frame scheduling, validated API bridge, and watchdogs |
@@ -260,6 +265,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `tests/drones.test.js` | Spawn bounds, launch/impact spacing, frame timing, queue cancellation, effects, and disposal |
 | `tests/audio.test.js` | Audio activation, sample preparation, distance, event classification, voice limits, and cleanup |
 | `tests/camera-views.test.js` | Gun pose/barrel framing, retained free view, tail mounting/airframe visibility, target replacement, waiting, projection resizing, and button cleanup |
+| `tests/view-ui.test.js` | Fullscreen/browser exit, fallback/Escape, late-request cleanup, and collapsed radar updates |
 | `tests/effects.test.js` | Tracer speed/lifetime, retained launch direction, bounded visual pools, and resource disposal |
 | `public/three-LICENSE.txt` | Three.js MIT license, copied into the production build |
 | `package.json` / `package-lock.json` | npm scripts and reproducible dependency versions |

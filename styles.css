@@ -83,6 +83,44 @@ body {
   outline-offset: 2px;
 }
 
+.camera-view-tabs .fullscreen-toggle {
+  min-width: 32px;
+  padding: 0 7px;
+  margin-left: 2px;
+  border-left: 1px solid #415c6670;
+}
+
+.fullscreen-toggle svg,
+.radar-collapse svg {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fullscreen-toggle .fullscreen-exit,
+.fullscreen-toggle[aria-pressed="true"] .fullscreen-enter {
+  display: none;
+}
+
+.fullscreen-toggle[aria-pressed="true"] .fullscreen-exit {
+  display: initial;
+}
+
+.stage:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+}
+
+.stage[data-fullscreen="true"] > :not(#viewport):not(.camera-views),
+.stage[data-fullscreen="true"] .camera-view-status {
+  display: none;
+}
+
 .camera-view-status {
   display: block;
   margin-top: 3px;
@@ -184,9 +222,46 @@ body {
   align-items: center;
   gap: 7px;
   margin: 0;
+  margin-right: auto;
   color: #d9ffe9;
   font: 600 11px system-ui, sans-serif;
   letter-spacing: 1.5px;
+}
+
+.radar-collapse {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #679d8344;
+  border-radius: 4px;
+  background: transparent;
+  color: #9ad6b9;
+  cursor: pointer;
+}
+
+.radar-collapse:hover {
+  background: #234b3e;
+  color: #d9ffe9;
+}
+
+.radar-collapse:focus-visible {
+  outline: 2px solid #d7f3e1;
+  outline-offset: 2px;
+}
+
+.radar-widget[data-collapsed="true"] .radar-collapse svg {
+  transform: rotate(180deg);
+}
+
+.radar-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.radar-body[hidden] {
+  display: none;
 }
 
 .radar-live-dot {
@@ -468,6 +543,12 @@ body {
   .radar-header {
     flex-wrap: wrap;
     gap: 3px;
+  }
+
+  #radar-count {
+    flex-basis: 100%;
+    order: 1;
+    text-align: left;
   }
 
   .scene-controls {
