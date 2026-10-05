@@ -77,7 +77,7 @@ test('the empty template runs in a real worker and idle frames execute no code',
   assert.deepEqual(h.errors, []);
 });
 
-test('successful startup triggers the start callback once per run, before frame updates', t => {
+test('the first successful frame triggers the start callback once per run', t => {
   const instances = [];
   let starts = 0;
   const h = createHarness(t, {
@@ -91,9 +91,12 @@ test('successful startup triggers the start callback once per run, before frame 
   h.runner.run(DEFAULT_CODE);
   assert.equal(starts, 0);
   instances[0].onmessage({ data: { type: 'ready' } });
-  assert.equal(starts, 1);
+  assert.equal(starts, 0, 'compilation must not launch scene activity');
   h.runner.tick(0.02);
   instances[0].onmessage({ data: { type: 'frame', id: 1, commands: [] } });
+  assert.equal(starts, 1);
+  h.runner.tick(0.02);
+  instances[0].onmessage({ data: { type: 'frame', id: 2, commands: [] } });
   assert.equal(starts, 1);
 
   const deliverOldMessage = instances[0].onmessage;
@@ -102,11 +105,14 @@ test('successful startup triggers the start callback once per run, before frame 
   deliverOldMessage({ data: { type: 'ready' } });
   assert.equal(starts, 1);
   instances[1].onmessage({ data: { type: 'ready' } });
+  assert.equal(starts, 1);
+  h.runner.tick(0.02);
+  instances[1].onmessage({ data: { type: 'frame', id: 1, commands: [] } });
   assert.equal(starts, 2);
   assert.deepEqual(h.errors, []);
 });
 
-test('failed or cancelled startup never triggers the start callback', t => {
+test('failed startup and cancellation before the first frame never trigger the start callback', t => {
   let instance;
   let starts = 0;
   const h = createHarness(t, {
@@ -123,6 +129,15 @@ test('failed or cancelled startup never triggers the start callback', t => {
   const deliverCancelledMessage = instance.onmessage;
   h.runner.stop();
   deliverCancelledMessage({ data: { type: 'ready' } });
+  assert.equal(starts, 0);
+  assert.equal(h.runner.isRunning(), false);
+
+  h.runner.run(DEFAULT_CODE);
+  instance.onmessage({ data: { type: 'ready' } });
+  h.runner.tick(0.02);
+  const deliverCancelledFrame = instance.onmessage;
+  h.runner.stop();
+  deliverCancelledFrame({ data: { type: 'frame', id: 1, commands: [] } });
   assert.equal(starts, 0);
   assert.equal(h.runner.isRunning(), false);
 });
@@ -215,7 +230,8 @@ test('missing, non-function, and generator frame callbacks are rejected', async 
 
 test('runtime errors include the editor line and discard the entire failed command batch', async t => {
   let cleanup = 0;
-  const h = createHarness(t, { onStop: () => cleanup++ });
+  let starts = 0;
+  const h = createHarness(t, { onStop: () => cleanup++, onStart: () => starts++ });
   await h.run('function updateGun() {\n  fire();\n  throw new Error("test fault");\n}');
   const before = cleanup;
   await h.step(0.02);
@@ -224,6 +240,14 @@ test('runtime errors include the editor line and discard the entire failed comma
   assert.equal(h.runner.isRunning(), false);
   assert.equal(cleanup, before + 1);
   assert.deepEqual(h.calls, []);
+  assert.equal(starts, 0, 'a first-frame runtime error must not launch a swarm');
+
+  assert.equal(await h.run('function updateGun() { fire(); }'), true);
+  assert.equal(starts, 0);
+  await h.step(0.02);
+  assert.equal(starts, 1, 'corrected code should launch a swarm after its first successful frame');
+  await h.step(0.02);
+  assert.equal(starts, 1);
 });
 
 test('thrown primitives and invalid angle arguments display errors', async t => {
@@ -276,7 +300,8 @@ test('the VM cannot access browser or Node globals, even through function constr
 });
 
 test('excessive commands, rejected promises, and promises that never settle stop the sandbox', async t => {
-  const h = createHarness(t);
+  let starts = 0;
+  const h = createHarness(t, { onStart: () => starts++ });
   for (const [body, expected] of [
     ['for (let i=0;i<' + (SANDBOX_LIMITS.commandsPerFrame + 1) + ';i++) fire();', /Too many gun commands/],
     ['return Promise.reject(new Error("async fault"));', /async fault/],
@@ -288,6 +313,7 @@ test('excessive commands, rejected promises, and promises that never settle stop
     assert.equal(h.runner.isRunning(), false);
   }
   assert.deepEqual(h.calls, []);
+  assert.equal(starts, 0);
 });
 
 test('script commands reach the actual gun API and Stop cancels firing', async t => {
@@ -326,7 +352,9 @@ test('source and error payloads are bounded before they reach the UI', async t =
 test('a frame watchdog terminates a worker that never completes its callback', async t => {
   let instance;
   let terminated = 0;
+  let starts = 0;
   const h = createHarness(t, {
+    onStart: () => starts++,
     createWorker: () => (instance = { postMessage() {}, terminate() { terminated++; } }),
     responseTimeoutMs: 20,
   });
@@ -335,6 +363,7 @@ test('a frame watchdog terminates a worker that never completes its callback', a
   await h.step(0.02);
   assert.equal(h.errors[0].name, 'TimeoutError');
   assert.equal(terminated, 1);
+  assert.equal(starts, 0);
 });
 
 test('slow callbacks do not queue frames and their next step receives accumulated time', t => {
@@ -371,7 +400,9 @@ test('startup watchdog terminates an unresponsive worker and reports a timeout',
 
 test('invalid command batches cannot invoke arbitrary host functions or apply partial commands', async t => {
   let instance;
+  let starts = 0;
   const h = createHarness(t, {
+    onStart: () => starts++,
     createWorker: () => (instance = { postMessage() {}, terminate() {} }),
   });
   h.runner.run(DEFAULT_CODE);
@@ -381,6 +412,7 @@ test('invalid command batches cannot invoke arbitrary host functions or apply pa
   assert.equal(h.runner.isRunning(), false);
   assert.deepEqual(h.calls, []);
   assert.match(h.errors[0].message, /Invalid sandbox command/);
+  assert.equal(starts, 0);
 });
 
 test('commands from a stopped worker cannot affect a later run', async t => {

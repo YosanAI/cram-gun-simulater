@@ -17,6 +17,7 @@ export function createSimulationRunner(api, {
 } = {}) {
   let worker = null;
   let ready = false;
+  let started = false;
   let pendingId = null;
   let nextId = 0;
   let watchdog;
@@ -36,6 +37,7 @@ export function createSimulationRunner(api, {
     }
     worker = null;
     ready = false;
+    started = false;
     pendingId = null;
     pendingDelta = 0;
     onStop();
@@ -80,7 +82,6 @@ export function createSimulationRunner(api, {
       } else if (message?.type === 'ready' && !ready) {
         clearTimeout(watchdog);
         ready = true;
-        onStart();
         onStateChange(true, 'running');
       } else if (message?.type === 'frame' && ready && pendingId !== null && message.id === pendingId) {
         // Validate the whole batch before allowing any command to touch the app.
@@ -92,6 +93,12 @@ export function createSimulationRunner(api, {
         }
         elapsedTime += sentDelta;
         pendingId = null;
+        // Compilation alone cannot catch errors inside updateGun. Start scene
+        // activity only after the first callback and its commands succeed.
+        if (!started) {
+          started = true;
+          onStart();
+        }
       } else {
         throw new Error('Invalid response from the script sandbox.');
       }

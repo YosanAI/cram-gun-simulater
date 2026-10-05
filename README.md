@@ -39,7 +39,7 @@ The top-right dat.gui panel includes **Drone swarm** controls in development and
 
 ## Drone swarms
 
-Each successful **Run** in the code editor automatically queues a swarm using the current settings. Click **Spawn swarm** to queue additional drones manually:
+Each **Run** in the code editor automatically queues a swarm after the first `updateGun` callback succeeds, using the current settings. Click **Spawn swarm** to queue additional drones manually:
 
 - **Swarm size:** 1–200 drones per request, with at most 200 in flight or waiting to launch.
 - **Spawn interval (s):** 0.1–10 seconds between launches. The initial drone launches immediately; subsequent drones appear one at a time. Additional requests join the existing schedule and respect the selected spacing, even if the previous request contained only one drone.
@@ -101,7 +101,7 @@ function updateGun(elapsedTime, deltaTime, radarData) {
 
 Write your controller and click **Run** (or press **Ctrl/Cmd + Enter** in the editor). The same button changes to **Stop** as soon as the sandbox starts, and returns to **Run** after stopping or an error. The code compiles once inside an isolated QuickJS VM in a Web Worker. Each visible animation frame sends an update when the worker is ready; successful API commands return to the scene asynchronously. Click **Stop**, press **Ctrl/Cmd + Enter** again, or press **Escape** in the editor to terminate the worker, discard pending commands, and cancel firing. The scene continues rendering normally.
 
-Once compilation succeeds, the editor queues one swarm using the current **Drone swarm** settings. Syntax errors and cancelled startup do not spawn drones. Each successful restart queues another swarm, preserving existing flights, queued launches, and counters. The usual capacity limit applies, with errors displayed in the scene controls. Stopping the controller leaves drone flights and queued launches running independently.
+Once the first `updateGun` callback and its API commands complete successfully, the editor queues one swarm using the current **Drone swarm** settings. Compilation alone does not spawn drones: syntax errors, errors or timeouts during the first callback, and runs stopped before that callback completes do not queue a swarm. That first callback receives the current radar data, which may be empty before the swarm launches. Each successful restart queues another swarm, preserving existing flights, queued launches, and counters. The usual capacity limit applies, with errors displayed in the scene controls. Stopping the controller leaves drone flights and queued launches running independently.
 
 Drag the editor's **top-right resize handle** to change its width and height. You can also focus the handle and use the arrow keys; hold **Shift** for larger steps. Sizes stay within the viewport and leave room for the compass. The header's chevron collapses or expands the editor while preserving its code and size. Run/Stop stays visible when collapsed, and collapsing does not stop a running script. Script errors automatically expand the editor to show the message.
 
