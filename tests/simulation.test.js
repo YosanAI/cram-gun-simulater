@@ -144,7 +144,7 @@ test('failed startup and cancellation before the first frame never trigger the s
 
 test('frame timing and all five gun functions pass through the isolated API bridge', async t => {
   const h = createHarness(t);
-  assert.equal(await h.run('function updateGun(t, dt) { setAzimuth(getCurrentAzimuth()+t); setElevation(getCurrentElevation()+dt); fire(); }'), true);
+  assert.equal(await h.run('function updateGun(radarData, t, dt) { setAzimuth(getCurrentAzimuth()+t); setElevation(getCurrentElevation()+dt); fire(); }'), true);
   await h.step(0.02);
   await h.step(0.03);
   assert.deepEqual(h.calls.map(call => call[0]), ['azimuth', 'elevation', 'fire', 'azimuth', 'elevation', 'fire']);
@@ -154,13 +154,13 @@ test('frame timing and all five gun functions pass through the isolated API brid
   assert.equal(h.runner.getTime(), 0.05);
 });
 
-test('the third callback parameter delivers fresh radar data through the real worker without host mutation', async t => {
+test('the first callback parameter delivers fresh radar data through the real worker without host mutation', async t => {
   const h = createHarness(t);
   const radarData = [{ id: 7, pos: { x: 3, y: 4, z: 12 }, distance: 13 }];
   await h.run(`
     let previous;
     JSON.parse = () => { throw new Error("User parser must not affect the bridge"); };
-    function updateGun(time, delta, radarData) {
+    function updateGun(radarData) {
       if (!Array.isArray(radarData)) throw new Error("Expected target array");
       if (radarData.length) {
         if (previous && radarData === previous) throw new Error("Expected fresh snapshot");
@@ -188,7 +188,7 @@ test('the third callback parameter delivers fresh radar data through the real wo
 
 test('Stop discards execution and restarting resets the clock and callback closure', async t => {
   const h = createHarness(t);
-  const source = 'let count=0; function updateGun(t) { setAzimuth(++count); setElevation(t); }';
+  const source = 'let count=0; function updateGun(radarData, t) { setAzimuth(++count); setElevation(t); }';
   await h.run(source);
   await h.step(0.02);
   await h.step(0.03);
@@ -207,7 +207,7 @@ test('Stop discards execution and restarting resets the clock and callback closu
 
 test('syntax errors are reported and corrected scripts can restart', async t => {
   const h = createHarness(t);
-  assert.equal(await h.run('function updateGun(t, dt) {'), false);
+  assert.equal(await h.run('function updateGun(radarData, t, dt) {'), false);
   assert.equal(h.errors[0].name, 'SyntaxError');
   assert.equal(h.runner.isRunning(), false);
   assert.equal(await h.run('function updateGun() { fire(); }'), true);
@@ -443,7 +443,7 @@ test('the installed Three.js library and Math work on radar targets inside the r
     const geometry = new THREE.BoxGeometry(2, 2, 2);
     const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: "red" }));
     scene.add(mesh);
-    function updateGun(t, dt, radarData) {
+    function updateGun(radarData, t, dt) {
       const { x, y, z } = radarData[0].pos;
       position.set(x, y, z);
       mesh.position.copy(position);

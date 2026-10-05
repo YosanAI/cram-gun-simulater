@@ -1,6 +1,6 @@
 import { SANDBOX_LIMITS, validateCommands, validateConsoleEntries, serializeSandboxError } from './sandbox-limits.js';
 
-export const DEFAULT_CODE = `function updateGun(elapsedTime, deltaTime, radarData) {
+export const DEFAULT_CODE = `function updateGun(radarData, elapsedTime, deltaTime) {
   // Uncomment to see the API in action.
   /*
   const azimuth = getCurrentAzimuth();

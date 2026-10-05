@@ -97,7 +97,7 @@ The radar uses its own lightweight 2D canvas and receives the same `radarData` s
 The CodeMirror editor starts with:
 
 ```js
-function updateGun(elapsedTime, deltaTime, radarData) {
+function updateGun(radarData, elapsedTime, deltaTime) {
   // Uncomment to see the API in action.
   /*
   const azimuth = getCurrentAzimuth();
@@ -118,20 +118,20 @@ Drag the editor's **top-right resize handle** to change its width and height. Yo
 
 `elapsedTime` is elapsed simulation time in **seconds**, starting at **0** on the first callback of each run. `deltaTime` is the simulation time since the previous callback. The scene retains its maximum timestep of **0.05 seconds**; if the worker is still busy, subsequent frames accumulate into the next callback's `deltaTime` instead of queueing work. The simulation clock pauses while the tab is hidden. Each new run resets the clock and variables declared in the editor; it keeps the gun's current pose. Editing while running applies to the next run after stopping.
 
-The third parameter, `radarData`, is a fresh array of **live targets only**:
+The first parameter, `radarData`, is a fresh array of **live targets only**:
 
 ```js
 [{ id: 1, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]
 ```
 
-`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed intersection of the gun's azimuth and elevation axes in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Existing two-parameter controllers continue to work.
+`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed intersection of the gun's azimuth and elevation axes in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Controllers that only use targets can declare `updateGun(radarData)`. Time-based controllers use `updateGun(radarData, elapsedTime, deltaTime)`.
 
 The five gun API functions are available directly inside the code, with no imports or `window.phalanx` prefix. Angles are in **radians**. For example:
 
 ```js
 let nextShot = 0;
 
-function updateGun(elapsedTime, deltaTime, radarData) {
+function updateGun(radarData, elapsedTime, deltaTime) {
   setAzimuth(elapsedTime * 0.4);
   setElevation(Math.PI / 6 + Math.sin(elapsedTime) * 0.1);
 
@@ -149,7 +149,7 @@ The editor provides normal JavaScript built-ins, including **Math**, JSON, Date,
 ```js
 const position = new THREE.Vector3();
 
-function updateGun(elapsedTime, deltaTime, radarData) {
+function updateGun(radarData, elapsedTime, deltaTime) {
   if (!radarData.length) return;
   const { x, y, z } = radarData[0].pos;
   position.set(x, y, z);

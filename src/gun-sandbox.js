@@ -127,11 +127,11 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
     // Capture intrinsics before user code can modify its own globals.
     invoke = bounded(() => unwrap(vm.evalCode(
       '(function () { const apply = Reflect.apply; const tag = Object.prototype.toString; const Fail = TypeError; const parse = JSON.parse; const P = Promise; const resolve = P.resolve;' +
-      'return function (fn, time, delta, radarJson, validateOnly) {' +
+      'return function (fn, radarJson, time, delta, validateOnly) {' +
       'const kind = apply(tag, fn, []);' +
       'if (kind !== "[object Function]" && kind !== "[object AsyncFunction]") throw new Fail("updateGun must be a function, not a generator.");' +
       'if (validateOnly) return;' +
-      'const result = apply(fn, undefined, [time, delta, parse(radarJson)]);' +
+      'const result = apply(fn, undefined, [parse(radarJson), time, delta]);' +
       'return apply(resolve, P, [result]);' +
       '}; })()', 'sandbox-internal.js',
     )));
@@ -140,7 +140,7 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
       '\n;return typeof updateGun === "function" ? updateGun : null; })()',
       'update-gun.js',
     )));
-    if (vm.typeof(callback) !== 'function') throw new TypeError('Define function updateGun(elapsedTime, deltaTime, radarData).');
+    if (vm.typeof(callback) !== 'function') throw new TypeError('Define function updateGun(radarData, elapsedTime, deltaTime).');
     bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, vm.undefined, vm.undefined, vm.undefined, vm.true)).dispose());
     bounded(drainJobs);
   } catch (error) {
@@ -162,7 +162,7 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
         // Parse into the guest heap; no host objects or functions cross the VM boundary.
         radarJson = vm.newString(JSON.stringify(radarData));
         bounded(() => {
-          const result = unwrap(vm.callFunction(invoke, vm.undefined, callback, time, delta, radarJson, vm.false));
+          const result = unwrap(vm.callFunction(invoke, vm.undefined, callback, radarJson, time, delta, vm.false));
           try {
             drainJobs();
             const state = vm.getPromiseState(result);
