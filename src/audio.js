@@ -3,6 +3,7 @@ const FILES = Object.freeze({
   airburst: 'airburst.mp3', impact: 'impact.mp3', metal: 'metal-crash.mp3',
 });
 export const AUDIO_LIMITS = Object.freeze({ engines: 24, explosions: 16, referenceDistance: 8, rolloff: 1.6 });
+const MIX = Object.freeze({ gun: 0.22, engine: 0.32, airburst: 0.9, impact: 0.95 });
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
 /** Listener stays at the gun pivot, facing +Z, independently of the camera. */
@@ -13,6 +14,17 @@ export function getDroneAcoustics(pos) {
     gain: AUDIO_LIMITS.referenceDistance / (AUDIO_LIMITS.referenceDistance + AUDIO_LIMITS.rolloff * Math.max(0, distance - AUDIO_LIMITS.referenceDistance)),
     pan: clamp(pos.x / Math.max(1, distance), -0.85, 0.85),
     cutoff: 1000 + 6500 / (1 + distance / 35),
+  };
+}
+
+/** Air detonations retain distance cues without becoming inaudible across the arena. */
+export function getExplosionAcoustics(pos, kind) {
+  const spatial = getDroneAcoustics(pos);
+  if (kind === 'impact') return { ...spatial, cutoff: Math.min(spatial.cutoff, 3600) };
+  return {
+    ...spatial,
+    gain: 0.7 + 0.3 * spatial.gain,
+    cutoff: 5500 + 4500 * spatial.gain,
   };
 }
 
@@ -34,8 +46,8 @@ function normalizedBuffer(context, samples, sampleRate) {
   return buffer;
 }
 
-/** Find a sustained section, avoiding silence/startup, and crossfade its seam. */
-export function prepareLoop(context, input, seconds) {
+/** Find a sustained section and blend its seam without a recurring volume dip. */
+export function prepareLoop(context, input, seconds, crossfadeSeconds = 0.12) {
   const samples = mono(input);
   const size = Math.min(samples.length, Math.floor(seconds * input.sampleRate));
   const step = Math.max(1, Math.floor(input.sampleRate * 0.05));
@@ -54,11 +66,25 @@ export function prepareLoop(context, input, seconds) {
     const candidate = Math.min(...windows) * 0.7 + mean * 0.3;
     if (candidate > score) { score = candidate; best = start; }
   }
-  const fade = Math.min(Math.floor(input.sampleRate * 0.035), Math.floor(size / 4));
+  const fade = Math.min(Math.floor(input.sampleRate * crossfadeSeconds), Math.floor(size / 4));
   const loop = samples.slice(best, best + size - fade);
+  let headPower = 0;
+  let tailPower = 0;
+  let crossPower = 0;
   for (let i = 0; i < fade; i++) {
-    const mix = i / fade;
-    loop[i] = samples[best + size - fade + i] * (1 - mix) + loop[i] * mix;
+    const head = loop[i];
+    const tail = samples[best + size - fade + i];
+    headPower += head * head;
+    tailPower += tail * tail;
+    crossPower += head * tail;
+  }
+  const correlation = clamp(crossPower / Math.max(1e-12, Math.sqrt(headPower * tailPower)), -0.8, 1);
+  for (let i = 0; i < fade; i++) {
+    const mix = fade > 1 ? i / (fade - 1) : 0;
+    const headWeight = Math.sin(mix * Math.PI / 2);
+    const tailWeight = Math.cos(mix * Math.PI / 2);
+    const power = Math.sqrt(1 + 2 * correlation * headWeight * tailWeight);
+    loop[i] = (samples[best + size - fade + i] * tailWeight + loop[i] * headWeight) / power;
   }
   return normalizedBuffer(context, loop, input.sampleRate);
 }
@@ -103,6 +129,7 @@ export function createSceneAudio({
   let context;
   let master;
   let compressor;
+  const buses = {};
   let buffers;
   let loading;
   let gun;
@@ -124,7 +151,7 @@ export function createSceneAudio({
     if (immediate) voice.cleanup();
   }
 
-  function voice(buffer, { loop = false, gain = 0, pan = 0, cutoff = 16000, rate = 1, offset = 0, delay = 0, onEnded } = {}) {
+  function voice(buffer, { bus, loop = false, gain = 0, pan = 0, cutoff = 16000, rate = 1, offset = 0, delay = 0, onEnded } = {}) {
     const source = context.createBufferSource();
     const filter = context.createBiquadFilter();
     const amplitude = context.createGain();
@@ -136,7 +163,7 @@ export function createSceneAudio({
     filter.frequency.value = cutoff;
     amplitude.gain.value = gain;
     panner.pan.value = pan;
-    source.connect(filter).connect(amplitude).connect(panner).connect(master);
+    source.connect(filter).connect(amplitude).connect(panner).connect(buses[bus]);
     const result = { source, filter, gain: amplitude, panner, stopped: false, cleaned: false,
       cleanup() {
         if (result.cleaned) return;
@@ -176,27 +203,31 @@ export function createSceneAudio({
     if (!canPlay()) return;
     const now = context.currentTime;
     if (frame.firing && frame.drive > 0.01) {
-      if (!gun) gun = voice(buffers.gun, { loop: true });
-      gun.gain.gain.setTargetAtTime(0.45 * (0.55 + 0.45 * frame.drive), now, 0.015);
+      if (!gun) gun = voice(buffers.gun, { bus: 'gun', loop: true, cutoff: 3200 });
+      gun.gain.gain.setTargetAtTime(MIX.gun * (0.55 + 0.45 * frame.drive), now, 0.025);
     } else stopFiring();
     const audible = frame.radarData.map(target => ({ target, ...getDroneAcoustics(target.pos) }))
       .sort((a, b) => a.distance - b.distance).slice(0, AUDIO_LIMITS.engines);
     const liveIds = new Set(audible.map(item => item.target.id));
     for (const [id, engine] of engines) if (!liveIds.has(id)) { stopVoice(engine); engines.delete(id); }
-    const mix = 1 / Math.sqrt(Math.max(1, audible.length));
+    // Let a swarm build in volume. Only limit power above four nearby engines;
+    // distant drones must not turn down a close one just by increasing the count.
+    const power = audible.reduce((sum, item) => sum + item.gain * item.gain, 0);
+    const mix = 1 / Math.sqrt(Math.max(1, power / 4));
     for (const item of audible) {
       const id = item.target.id;
       let engine = engines.get(id);
       if (!engine) {
-        engine = voice(buffers.engine, { loop: true, offset: ((id * 0.61803398875) % 1) * buffers.engine.duration });
-        engine.baseRate = 0.97 + (id % 7) * 0.01;
+        engine = voice(buffers.engine, { bus: 'engines', loop: true, offset: ((id * 0.61803398875) % 1) * buffers.engine.duration });
+        engine.baseRate = 0.88 + ((id * 0.754877666) % 1) * 0.18;
+        engine.level = 0.92 + ((id * 0.569840291) % 1) * 0.16;
         engine.distance = item.distance;
         engines.set(id, engine);
       }
       const closingSpeed = frame.deltaTime > 0 ? (engine.distance - item.distance) / frame.deltaTime : 0;
       const doppler = clamp(343 / (343 - clamp(closingSpeed, -30, 30)), 0.9, 1.1);
       engine.source.playbackRate.setTargetAtTime(engine.baseRate * doppler, now, 0.1);
-      engine.gain.gain.setTargetAtTime(0.5 * mix * item.gain, now, 0.04);
+      engine.gain.gain.setTargetAtTime(MIX.engine * mix * item.gain * engine.level, now, 0.04);
       engine.filter.frequency.setTargetAtTime(item.cutoff, now, 0.07);
       engine.panner.pan.setTargetAtTime(item.pan, now, 0.05);
       engine.distance = item.distance;
@@ -219,15 +250,22 @@ export function createSceneAudio({
       const oldest = bursts.values().next().value;
       stopVoice(oldest.main, true); stopVoice(oldest.metal, true);
     }
-    const spatial = getDroneAcoustics(event.pos);
+    const spatial = getExplosionAcoustics(event.pos, event.kind);
     const impact = event.kind === 'impact';
+    // Briefly make room for the detonation without stopping either continuous loop.
+    for (const [name, level] of [['gun', 0.75], ['engines', 0.8]]) {
+      const gain = buses[name].gain;
+      gain.cancelScheduledValues(context.currentTime);
+      gain.setTargetAtTime(level, context.currentTime, 0.01);
+      gain.setTargetAtTime(1, context.currentTime + 0.25, 0.12);
+    }
     const burst = {};
     burst.main = voice(impact ? buffers.impact : buffers.airburst, {
-      gain: spatial.gain * (impact ? 0.95 : 0.8), pan: spatial.pan,
-      cutoff: Math.min(spatial.cutoff, impact ? 3600 : 10000), rate: impact ? 0.88 : 1.04,
+      bus: 'explosions', gain: spatial.gain * (impact ? MIX.impact : MIX.airburst), pan: spatial.pan,
+      cutoff: spatial.cutoff, rate: impact ? 0.88 : 1.04,
       onEnded() { bursts.delete(burst); stopVoice(burst.metal, true); },
     });
-    if (impact) burst.metal = voice(buffers.metal, { gain: 0.48 * spatial.gain, pan: spatial.pan, delay: 0.018 });
+    if (impact) burst.metal = voice(buffers.metal, { bus: 'explosions', gain: 0.48 * spatial.gain, pan: spatial.pan, delay: 0.018 });
     bursts.add(burst);
   }
 
@@ -240,12 +278,17 @@ export function createSceneAudio({
         master = context.createGain();
         master.gain.value = volume;
         compressor = context.createDynamicsCompressor();
-        compressor.threshold.value = -8;
-        compressor.knee.value = 6;
-        compressor.ratio.value = 12;
+        compressor.threshold.value = -6;
+        compressor.knee.value = 12;
+        compressor.ratio.value = 4;
         compressor.attack.value = 0.003;
         compressor.release.value = 0.16;
         master.connect(compressor).connect(context.destination);
+        for (const name of ['gun', 'engines', 'explosions']) {
+          buses[name] = context.createGain();
+          buses[name].gain.value = 1;
+          buses[name].connect(master);
+        }
         loading = (async () => {
           let decoded;
           if (loadBuffers) decoded = await loadBuffers(context);
@@ -257,8 +300,8 @@ export function createSceneAudio({
           }
           if (disposed) return;
           buffers = {
-            gun: prepareLoop(context, decoded.gun, 0.65),
-            engine: prepareLoop(context, decoded.engine, 2.5),
+            gun: prepareLoop(context, decoded.gun, 1.2, 0.12),
+            engine: prepareLoop(context, decoded.engine, 2.4, 0.28),
             airburst: prepareExplosion(context, decoded.airburst, 2.1),
             impact: prepareExplosion(context, decoded.impact, 3.3),
             metal: prepareExplosion(context, decoded.metal, 0.9),
@@ -310,6 +353,7 @@ export function createSceneAudio({
       eventTarget?.removeEventListener('pointerdown', activate);
       eventTarget?.removeEventListener('keydown', activate);
       master?.disconnect(); compressor?.disconnect();
+      for (const bus of Object.values(buses)) bus.disconnect();
       if (context) void context.close().catch(() => {});
     },
   };

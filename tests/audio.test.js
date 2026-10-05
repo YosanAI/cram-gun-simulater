@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createSceneAudio, getDroneAcoustics, prepareLoop, prepareExplosion, AUDIO_LIMITS } from '../src/audio.js';
+import { createSceneAudio, getDroneAcoustics, getExplosionAcoustics, prepareLoop, prepareExplosion, AUDIO_LIMITS } from '../src/audio.js';
 
 class Param {
-  constructor(value = 0) { this.value = value; }
-  setTargetAtTime(value) { this.value = value; }
+  constructor(value = 0) { this.value = value; this.targets = []; }
+  setTargetAtTime(value, time, constant) { this.value = value; this.targets.push({ value, time, constant }); }
   cancelScheduledValues() {}
 }
 class Node {
@@ -65,6 +65,7 @@ function harness(t, overrides = {}) {
 const frame = (radarData = [], firing = false) => ({ firing, drive: 1, deltaTime: 0.05, radarData });
 const target = (id, z) => ({ id, pos: { x: 0, y: 0, z }, distance: Math.abs(z) });
 const gain = source => source.connections[0].connections[0].gain.value;
+const bus = source => source.connections[0].connections[0].connections[0].connections[0];
 
 test('drone distance controls gain and tone, with panning around the gun origin', () => {
   const near = getDroneAcoustics({ x: 0, y: 0, z: 8 });
@@ -87,6 +88,25 @@ test('sample preparation skips silence, smooths loop seams and fades explosion t
   const blast = prepareExplosion(context, input, 2.1);
   assert.equal(blast.duration, 2.1);
   assert.ok(Math.abs(blast.getChannelData(0).at(-1)) < 0.005);
+});
+
+test('power crossfades keep both correlated and uncorrelated loops at a steady level', () => {
+  const context = new Context();
+  const input = context.createBuffer(1, 4000, 1000);
+  const data = input.getChannelData(0);
+  data.fill(0.4);
+  const correlated = prepareLoop(context, input, 1.2, 0.12).getChannelData(0);
+  for (const value of correlated) assert.ok(Math.abs(value - 0.85) < 1e-6);
+
+  let seed = 1234;
+  for (let i = 0; i < data.length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    data[i] = seed / 0xffffffff * 2 - 1;
+  }
+  const loop = prepareLoop(context, input, 1.2, 0.12).getChannelData(0);
+  const power = values => values.reduce((sum, value) => sum + value * value, 0) / values.length;
+  const ratio = power(loop.slice(0, 120)) / power(loop.slice(120));
+  assert.ok(ratio > 0.8 && ratio < 1.2, 'the seam should not have the linear crossfade power dip');
 });
 
 test('audio waits for activation, changes an engine with distance, and bounds swarm voices', async t => {
@@ -112,6 +132,31 @@ test('audio waits for activation, changes an engine with distance, and bounds sw
   assert.deepEqual(h.errors, []);
 });
 
+test('the swarm mixes distinct engine sources and grows in volume without distant-count ducking', async t => {
+  const h = harness(t);
+  await h.audio.unlock();
+  h.audio.update(frame([target(1, 8)]));
+  const first = h.context.sources[0];
+  const singlePower = gain(first) ** 2;
+  const nearby = [target(1, 8), target(2, 8), target(3, 8), target(4, 8)];
+  nearby[1].pos = { x: -8, y: 0, z: 0 };
+  nearby[2].pos = { x: 8, y: 0, z: 0 };
+  h.audio.update(frame(nearby));
+  assert.equal(h.audio.getState().engines, 4);
+  const engines = h.context.sources;
+  assert.equal(new Set(engines.map(source => source.started.offset)).size, 4);
+  assert.equal(new Set(engines.map(source => source.playbackRate.value)).size, 4);
+  assert.ok(engines[1].connections[0].connections[0].connections[0].pan.value < 0);
+  assert.ok(engines[2].connections[0].connections[0].connections[0].pan.value > 0);
+  assert.ok(engines.every(source => bus(source) === bus(first)));
+  assert.ok(engines.reduce((sum, source) => sum + gain(source) ** 2, 0) > singlePower * 3.5);
+
+  const before = gain(first);
+  h.audio.update(frame([target(1, 8), ...Array.from({ length: 23 }, (_, i) => target(i + 2, 200))]));
+  assert.equal(h.audio.getState().engines, 24);
+  assert.equal(gain(first), before, 'far engines should not reduce a close engine simply by increasing the count');
+});
+
 test('gun sound follows actual firing and mute/pause/disposal stop audio sources', async t => {
   const h = harness(t);
   await h.audio.unlock();
@@ -120,6 +165,9 @@ test('gun sound follows actual firing and mute/pause/disposal stop audio sources
   h.audio.update(frame([], true));
   assert.equal(h.context.sources.length, 1);
   assert.equal(h.context.sources[0].loop, true);
+  assert.ok(Math.abs(h.context.sources[0].buffer.duration - 1.08) < 1e-9);
+  assert.equal(gain(h.context.sources[0]), 0.22);
+  assert.equal(h.context.sources[0].connections[0].frequency.value, 3200);
   h.audio.setEnabled(false);
   assert.ok(h.context.sources[0].disconnected);
   h.audio.update(frame([target(1, 20)], true));
@@ -134,6 +182,33 @@ test('gun sound follows actual firing and mute/pause/disposal stop audio sources
   assert.equal(h.context.state, 'closed');
   assert.equal(h.handlers.size, 0);
   assert.equal(await h.audio.unlock(), false);
+});
+
+test('airbursts retain distance cues and audible gain at the far edge of gun range', async t => {
+  const near = getExplosionAcoustics({ x: 0, y: 0, z: 8 }, 'airburst');
+  const far = getExplosionAcoustics({ x: 100, y: 0, z: 200 }, 'airburst');
+  assert.ok(far.gain >= near.gain * 0.7 && far.gain < near.gain);
+  assert.ok(far.cutoff >= 5500);
+  assert.ok(far.pan > 0);
+  assert.ok(getExplosionAcoustics({ x: 0, y: 0, z: 200 }, 'impact').gain < 0.03);
+
+  const h = harness(t);
+  await h.audio.unlock();
+  h.audio.update(frame([target(1, 20)], true));
+  const gun = h.context.sources[0];
+  const engine = h.context.sources[1];
+  h.audio.playExplosion({ id: 2, kind: 'airburst', pos: { x: 100, y: 0, z: 200 } });
+  const air = h.context.sources[2];
+  assert.ok(gain(air) >= 0.63);
+  assert.notEqual(bus(air), bus(gun));
+  assert.notEqual(bus(air), bus(engine));
+  assert.equal(bus(air).connections[0], bus(gun).connections[0]);
+  assert.deepEqual(bus(gun).gain.targets.slice(-2).map(({ value, time }) => [value, time]), [[0.75, 0], [1, 0.25]]);
+  assert.deepEqual(bus(engine).gain.targets.slice(-2).map(({ value, time }) => [value, time]), [[0.8, 0], [1, 0.25]]);
+  assert.equal(gun.stopped, undefined);
+  assert.equal(engine.stopped, undefined);
+  h.audio.dispose();
+  assert.ok([gun, engine, air].every(source => bus(source).disconnected));
 });
 
 test('airbursts stop engines and differ from impact blasts with metal debris', async t => {

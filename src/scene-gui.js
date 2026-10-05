@@ -1,6 +1,7 @@
 import { GUI } from 'dat.gui';
 import { ANGLE_LIMITS, setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire } from './api.js';
 import { DEFAULT_SWARM, DRONE_LIMITS } from './drones.js';
+import { AUDIO_LIMITS } from './audio.js';
 
 /** Swarm controls in every build, with gun API testing controls in development. */
 export function createSceneGui({ drones, sound, includeGunControls = false }) {
@@ -13,15 +14,18 @@ export function createSceneGui({ drones, sound, includeGunControls = false }) {
   gui.domElement.style.width = '100%';
   host.append(status, gui.domElement);
   let audioStatus;
+  let audioVoices;
   let audioValues;
   if (sound) {
     const state = sound.getState();
-    audioValues = { enabled: state.enabled, volume: state.volume * 100, status: state.status };
+    audioValues = { enabled: state.enabled, volume: state.volume * 100, status: state.status, voices: state.engines + ' / ' + AUDIO_LIMITS.engines };
     const audio = gui.addFolder('Sound');
     audio.add(audioValues, 'enabled').name('Sound on').onChange(sound.setEnabled);
     audio.add(audioValues, 'volume', 0, 100).step(1).name('Volume (%)').onChange(value => sound.setVolume(value / 100));
     audioStatus = audio.add(audioValues, 'status').name('Audio');
     audioStatus.domElement.querySelector('input').readOnly = true;
+    audioVoices = audio.add(audioValues, 'voices').name('Drone voices');
+    audioVoices.domElement.querySelector('input').readOnly = true;
     audio.open();
   }
   const values = {
@@ -125,9 +129,17 @@ export function createSceneGui({ drones, sound, includeGunControls = false }) {
     spawnSwarm: values.spawn,
     sync() {
       updateStatus();
-      if (sound && audioValues.status !== sound.getState().status) {
-        audioValues.status = sound.getState().status;
-        audioStatus.updateDisplay();
+      if (sound) {
+        const state = sound.getState();
+        if (audioValues.status !== state.status) {
+          audioValues.status = state.status;
+          audioStatus.updateDisplay();
+        }
+        const voices = state.engines + ' / ' + AUDIO_LIMITS.engines;
+        if (audioValues.voices !== voices) {
+          audioValues.voices = voices;
+          audioVoices.updateDisplay();
+        }
       }
       if (!includeGunControls) return;
       // Read the public getters without interrupting a drag or numeric edit.

@@ -6,14 +6,17 @@ phalanx.mp3
 https://freesound.org/people/qubodup/sounds/163119/
 https://cdn.freesound.org/previews/163/163119_71257-hq.mp3
 Extracted by its creator from public-domain U.S. government footage. Playback
-selects a sustained section, mixes to mono and crossfades the loop seam.
+selects a sustained 1.2-second section, mixes to mono and applies a
+correlation-compensated power crossfade over 120 ms at the loop seam.
 
 drone-engine.mp3
-"Two Stroke Revving" — Yoo-toob-FX
-https://directory.audio/sound-effects/transportation/900-two-stroke-revving
-https://directory.audio/media/fc_local_media/audio_preview/two-stroke-revving.mp3
-An approximation of a small piston-engine drone, not a recording of the modeled
-drone. Playback selects a steady section, crossfades and varies pitch by drone ID.
+"rc plane fly-by 2.wav" — rcEyeSoar
+https://freesound.org/people/rcEyeSoar/sounds/176973/
+https://cdn.freesound.org/previews/176/176973_3283314-hq.mp3
+A recording of a gas-powered radio-control aircraft, replacing the former
+revving vehicle engine. It approximates the modeled drone, rather than recording
+that exact aircraft. Playback selects a sustained 2.4-second section, blends its
+seam over 280 ms, and gives each drone a separate offset, pitch and level.
 
 airburst.mp3
 "Grenade Explosion SFX (medium-sized, meaty, realistic)" — unfa
