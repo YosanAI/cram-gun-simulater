@@ -54,6 +54,10 @@ Gun hits use **hitscan ray–sphere intersection**. Each emitted firing streak t
 
 The first shot appears as the firing effects start; subsequent shots follow the existing streak emission budget of up to **19 shots per simulation second**, scaled by barrel drive. These are illustrative gameplay settings. Hits are instantaneous; the visible streaks are cosmetic and do not model projectile flight, gravity, or travel time.
 
+The muzzle effect combines a bright white core, orange glow, three turbulent flash jets, expanding pressure rings, and brief sparks with denser smoke. Tracers use thin camera-facing ribbons with a pale core and orange halo. They travel at **1,100 scene units/s** for **1.3 seconds** (about 1,430 units of travel), with a **0.08-unit halo width** and an **18-unit trail length**. Minimum screen dimensions are **3 px across the halo and 4 px along the streak**, and brightness is 80%. They stay bright for the first 75% of their lifetime, then fade. The first rendered segment covers its initial frame's travel so a fast shot does not skip the nearby view; segments crossing the camera are clipped before projection. Tracers still respect scene depth and the camera's field of view. The camera far plane is **6,000 units**, and the pool is limited to 80 tracers.
+
+The speed approximates the order of magnitude of Phalanx ammunition: the [Army's 2025 ammunition reference](https://jpeoaa.army.mil/Portals/94/Documents/JPEOAAPortfolioBook_2025.pdf?ver=A_B_NzEETpCjNyGj93y_2g%3D%3D) lists 3,610 ft/s (about 1,100 m/s) for the Block 1B MK 244 round. Scene dimensions are approximate, and these remain cosmetic constant-speed tracers; hit detection is instantaneous hitscan.
+
 A hit removes both airframe instances and the radar target immediately, bursts fire, sparks, a shockwave, and smoke at the drone's world position, and increments **killed** exactly once. A drone that reaches the mount instead increments **impacts**, without awarding a kill. The radar has a persistent kill counter, also repeated in the swarm controls. Clearing drones resets both counters and all effects.
 
 ## Sound
@@ -246,6 +250,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `tests/simulation.test.js` | Actual worker execution, API integration, error recovery, isolation, and resource limits |
 | `tests/drones.test.js` | Spawn bounds, launch/impact spacing, frame timing, queue cancellation, effects, and disposal |
 | `tests/audio.test.js` | Audio activation, sample preparation, distance, event classification, voice limits, and cleanup |
+| `tests/effects.test.js` | Tracer speed/lifetime, retained launch direction, bounded visual pools, and resource disposal |
 | `public/three-LICENSE.txt` | Three.js MIT license, copied into the production build |
 | `package.json` / `package-lock.json` | npm scripts and reproducible dependency versions |
 | `dist/` | Generated production output; run `npm run build` to create it |

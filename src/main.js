@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createPhalanx, MOUNT_SURFACE_Y } from './model.js';
 import { createEnvironment } from './environment.js';
-import { createFiringEffects } from './effects.js';
+import { createFiringEffects, FIRING_VISUALS } from './effects.js';
 import { MOTION } from './motion.js';
 import { createCodeEditor } from './code-editor.js';
 import { createDroneSwarm } from './drones.js';
@@ -44,7 +44,7 @@ async function start() {
   renderer.domElement.setAttribute('aria-hidden', 'true');
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.08, 1700);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.08, FIRING_VISUALS.cameraFar);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.065;
