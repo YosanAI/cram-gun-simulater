@@ -1,6 +1,6 @@
 import { SANDBOX_LIMITS, validateCommands, serializeSandboxError } from './sandbox-limits.js';
 
-export const DEFAULT_CODE = 'function updateGun(elapsedTime, deltaTime) {\n\n}\n';
+export const DEFAULT_CODE = 'function updateGun(elapsedTime, deltaTime, radarData) {\n\n}\n';
 
 const defaultWorker = () => new Worker(new URL('./sandbox.worker.js', import.meta.url), { type: 'module' });
 
@@ -116,7 +116,7 @@ export function createSimulationRunner(api, {
       }
     },
     stop,
-    tick(deltaTime) {
+    tick(deltaTime, radarData = []) {
       if (!worker || !ready) return;
       if (!Number.isFinite(deltaTime) || deltaTime < 0) return;
       pendingDelta += deltaTime;
@@ -130,7 +130,7 @@ export function createSimulationRunner(api, {
         armWatchdog(instance, responseTimeoutMs);
         instance.postMessage({
           type: 'frame', id: pendingId,
-          elapsedTime, deltaTime: sentDelta, pose: currentPose(),
+          elapsedTime, deltaTime: sentDelta, pose: currentPose(), radarData,
         });
       } catch (error) {
         fail(error);

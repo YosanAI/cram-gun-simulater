@@ -56,9 +56,9 @@ function createHarness(t, { api: suppliedApi, ...overrides } = {}) {
       await waitFor(() => phases.at(-1) === 'running' || errors.length > startingErrors);
       return errors.length === startingErrors;
     },
-    async step(delta) {
+    async step(delta, radarData) {
       const time = runner.getTime();
-      runner.tick(delta);
+      runner.tick(delta, radarData);
       await waitFor(() => runner.getTime() > time || !runner.isRunning());
     },
   };
@@ -85,6 +85,38 @@ test('frame timing and all five gun functions pass through the isolated API brid
     assert.ok(Math.abs(h.calls[index][1] - expected) < 1e-12);
   }
   assert.equal(h.runner.getTime(), 0.05);
+});
+
+test('the third callback parameter delivers fresh radar data through the real worker without host mutation', async t => {
+  const h = createHarness(t);
+  const radarData = [{ id: 7, pos: { x: 3, y: 4, z: 12 }, distance: 13 }];
+  await h.run(`
+    let previous;
+    JSON.parse = () => { throw new Error("User parser must not affect the bridge"); };
+    function updateGun(time, delta, radarData) {
+      if (!Array.isArray(radarData)) throw new Error("Expected target array");
+      if (radarData.length) {
+        if (previous && radarData === previous) throw new Error("Expected fresh snapshot");
+        setAzimuth(radarData[0].id);
+        setAltitude(radarData[0].pos.y);
+        setAzimuth(radarData[0].distance);
+        previous = radarData;
+        radarData[0].pos.y = 999;
+        radarData.pop();
+      } else {
+        fire();
+      }
+    }
+  `);
+  await h.step(0.02, radarData);
+  await h.step(0.02, radarData);
+  await h.step(0.02, []);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.calls, [
+    ['azimuth', 7], ['altitude', 4], ['azimuth', 13],
+    ['azimuth', 7], ['altitude', 4], ['azimuth', 13], ['fire'],
+  ]);
+  assert.deepEqual(radarData, [{ id: 7, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]);
 });
 
 test('Stop discards execution and restarting resets the clock and callback closure', async t => {
@@ -262,12 +294,14 @@ test('slow callbacks do not queue frames and their next step receives accumulate
   h.runner.run(DEFAULT_CODE);
   instance.onmessage({ data: { type: 'ready' } });
   h.runner.tick(0.02);
-  h.runner.tick(0.03);
+  h.runner.tick(0.03, [{ id: 1, pos: { x: 0, y: 0, z: 10 }, distance: 10 }]);
   assert.equal(messages.length, 2);
   instance.onmessage({ data: { type: 'frame', id: 1, commands: [] } });
-  h.runner.tick(0.01);
+  const latestTargets = [{ id: 2, pos: { x: 0, y: 0, z: 8 }, distance: 8 }];
+  h.runner.tick(0.01, latestTargets);
   assert.equal(messages[2].elapsedTime, 0.02);
   assert.equal(messages[2].deltaTime, 0.04);
+  assert.deepEqual(messages[2].radarData, latestTargets);
   instance.onmessage({ data: { type: 'frame', id: 2, commands: [] } });
   assert.equal(h.runner.getTime(), 0.06);
 });

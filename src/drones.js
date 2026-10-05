@@ -4,6 +4,8 @@ import { createImpactEffects } from './impact-effects.js';
 
 export const DRONE_LIMITS = Object.freeze({ maxActive: 200, minRadius: 5, maxRadius: 200, minSpeed: 0.5, maxSpeed: 20, minSpawnInterval: 0.1, maxSpawnInterval: 10 });
 export const DEFAULT_SWARM = Object.freeze({ count: 12, minRadius: 20, maxRadius: 40, speed: 4, spawnInterval: 0.8, randomDirections: true, azimuth: 0, altitude: Math.PI / 6 });
+// Deliberately simple gameplay hit volumes and range, in scene units.
+export const GUN_HIT_LIMITS = Object.freeze({ radius: 1.5, range: 250 });
 const ORIGIN = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const SCALE = new THREE.Vector3(1, 1, 1);
@@ -49,8 +51,12 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
   const drones = [];
   const pending = [];
   const matrix = new THREE.Matrix4();
+  const shotRay = new THREE.Ray();
+  const hitSphere = new THREE.Sphere(new THREE.Vector3(), GUN_HIT_LIMITS.radius);
+  const hitPoint = new THREE.Vector3();
   let nextId = 0;
   let impactCount = 0;
+  let killedCount = 0;
   let disposed = false;
   let simulationTime = 0;
   let lastSpawnAt = -Infinity;
@@ -70,6 +76,7 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
     drones.length = 0;
     pending.length = 0;
     impactCount = 0;
+    killedCount = 0;
     simulationTime = 0;
     lastSpawnAt = -Infinity;
     impacts.clear();
@@ -148,7 +155,38 @@ export function createDroneSwarm(scene, { random = Math.random, onImpact = () =>
       impacts.update(0);
     },
     clear,
-    getState: () => ({ active: drones.length, queued: pending.length, impacts: impactCount, explosions: impacts.getActiveCount() }),
+    fireRay(origin, direction) {
+      if (disposed || !drones.length) return null;
+      // Use the actual muzzle pose, never the desired angles or camera bearing.
+      shotRay.origin.copy(origin);
+      shotRay.direction.copy(direction).normalize();
+      if (!shotRay.direction.lengthSq()) return null;
+      let nearestIndex = -1;
+      let nearestDistance = Infinity;
+      for (let index = 0; index < drones.length; index++) {
+        hitSphere.center.copy(drones[index].position);
+        if (!shotRay.intersectSphere(hitSphere, hitPoint)) continue;
+        const distance = shotRay.origin.distanceTo(hitPoint);
+        if (distance <= GUN_HIT_LIMITS.range && distance < nearestDistance) {
+          nearestIndex = index;
+          nearestDistance = distance;
+        }
+      }
+      if (nearestIndex < 0) return null;
+      const [drone] = drones.splice(nearestIndex, 1);
+      killedCount++;
+      // The burst follows the drone's world position, including airborne hits.
+      impacts.burst(drone.position);
+      impacts.update(0);
+      syncMeshes();
+      return { id: drone.id, position: drone.position.clone() };
+    },
+    getState: () => ({ active: drones.length, queued: pending.length, killed: killedCount, impacts: impactCount, explosions: impacts.getActiveCount() }),
+    getRadarData: () => drones.map(drone => ({
+      id: drone.id,
+      pos: { x: drone.position.x, y: drone.position.y, z: drone.position.z },
+      distance: drone.position.length(),
+    })),
     getDrones: () => drones.map(drone => ({ id: drone.id, position: drone.position.clone(), direction: drone.direction.clone() })),
     dispose() {
       if (disposed) return;

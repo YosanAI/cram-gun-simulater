@@ -101,11 +101,11 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
 
     // Capture intrinsics before user code can modify its own globals.
     invoke = bounded(() => unwrap(vm.evalCode(
-      '(function () { const apply = Reflect.apply; const tag = Object.prototype.toString; const Fail = TypeError;' +
-      'return function (fn, time, delta, validateOnly) {' +
+      '(function () { const apply = Reflect.apply; const tag = Object.prototype.toString; const Fail = TypeError; const parse = JSON.parse;' +
+      'return function (fn, time, delta, radarJson, validateOnly) {' +
       'if (apply(tag, fn, []) !== "[object Function]") throw new Fail("updateGun must be a synchronous function.");' +
       'if (validateOnly) return;' +
-      'const result = apply(fn, undefined, [time, delta]);' +
+      'const result = apply(fn, undefined, [time, delta, parse(radarJson)]);' +
       'if (result && typeof result.then === "function") throw new Fail("updateGun must not return a Promise.");' +
       '}; })()', 'sandbox-internal.js',
     )));
@@ -114,8 +114,8 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
       '\n;return typeof updateGun === "function" ? updateGun : null; })()',
       'update-gun.js',
     )));
-    if (vm.typeof(callback) !== 'function') throw new TypeError('Define function updateGun(elapsedTime, deltaTime).');
-    bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, vm.undefined, vm.undefined, vm.true)).dispose());
+    if (vm.typeof(callback) !== 'function') throw new TypeError('Define function updateGun(elapsedTime, deltaTime, radarData).');
+    bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, vm.undefined, vm.undefined, vm.undefined, vm.true)).dispose());
     if (runtime.hasPendingJob()) throw new TypeError('Asynchronous code is not supported in updateGun.');
   } catch (error) {
     dispose();
@@ -123,21 +123,25 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
   }
 
   return {
-    tick(elapsedTime, deltaTime, currentPose) {
+    tick(elapsedTime, deltaTime, currentPose, radarData = []) {
       if (disposed) throw new Error('The sandbox has been stopped.');
       pose = currentPose;
       commands = [];
       inFrame = true;
       const time = vm.newNumber(elapsedTime);
       const delta = vm.newNumber(deltaTime);
+      let radarJson;
       try {
-        bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, time, delta, vm.false)).dispose());
+        // Parse into the guest heap; no host objects or functions cross the VM boundary.
+        radarJson = vm.newString(JSON.stringify(radarData));
+        bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, time, delta, radarJson, vm.false)).dispose());
         if (runtime.hasPendingJob()) throw new TypeError('Asynchronous code is not supported in updateGun.');
         return commands;
       } finally {
         inFrame = false;
         time.dispose();
         delta.dispose();
+        radarJson?.dispose();
       }
     },
     dispose,

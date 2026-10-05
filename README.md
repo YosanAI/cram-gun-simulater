@@ -1,6 +1,6 @@
 # Phalanx — Interactive CIWS
 
-A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, and configurable incoming drone swarms. A dat.gui panel controls drone spawning in every build and also exercises the gun API during development.
+A detailed, procedural **Three.js exterior recreation of the Phalanx Mk 15 Block 1B** with independently articulated azimuth, elevation, and barrel rotation. The browser displays the naval deck and ocean scene with a camera compass, a JavaScript controller editor, configurable incoming drone swarms, and a live radar widget. A dat.gui panel controls drone spawning in every build and also exercises the gun API during development.
 
 ## Run locally
 
@@ -40,20 +40,36 @@ Click **Spawn swarm** to queue drones using the current settings:
 - **Near radius / Far radius:** minimum and maximum distance from the gun's origin, from 5–200 scene units. Equal values place drones at one exact distance. Adjusting either limit keeps the range ordered.
 - **Random directions:** distributes the swarm across the hemisphere above the origin. Turn this off to choose **Azimuth (°)** from 0–360° and **Altitude (°)** from 0–90° above the horizon. Zero azimuth is +Z; 90° is +X, matching the gun coordinates.
 - **Speed (units/s):** constant flight speed from 0.5–20 scene units per second.
-- **Clear drones:** cancels pending launches, removes current flights and effects, and resets the impact counter.
+- **Clear drones:** cancels pending launches, removes current flights and effects, and resets the kill and impact counters.
 
-New requests add to the existing launch queue; settings are captured for each swarm. The default is 12 drones, 20–40 units away, with random directions, a speed of 4 units/s, and **0.8 seconds between launches**. The panel reports the number in flight, waiting to launch, and total impacts. Exceeding capacity displays an error without partially queueing a swarm. Scheduling uses the scene's simulation clock, so hidden pages pause launches as well as flight.
+New requests add to the existing launch queue; settings are captured for each swarm. The default is 12 drones, 20–40 units away, with random directions, a speed of 4 units/s, and **0.8 seconds between launches**. The panel reports the number in flight, waiting to launch, killed by the gun, and total impacts on the mount. Exceeding capacity displays an error without partially queueing a swarm. Scheduling uses the scene's simulation clock, so hidden pages pause launches as well as flight.
 
 The original procedural airframes use a Shahed-inspired delta wing, rounded fuselage, and twin wingtip fins, without propellers. They point along their flight path and fly straight toward the fixed gun origin. When a nose reaches the mount, the drone is removed and a large expanding fireball appears with a white-hot core, turbulent flame lobes, an expanding ground shockwave, sparks, stronger light, and rising smoke. Fireballs last about 1.2 seconds, while smoke fades over 5 seconds. Flights continue independently of the controller script. Airframes use two instanced meshes regardless of swarm size, and impact effects share a pool of at most 32 simultaneous bursts.
 
 The scene system owns the swarm instance and its internal `queueSwarm(options)` command. The controls exercise that system directly; spawning is not exposed on `window.phalanx` or in the controller editor's five-function gun API.
+
+### Gun hits and destruction
+
+Gun hits use **hitscan ray–sphere intersection**. Each emitted firing streak triggers one shot from the muzzle's current world position along its local +Z axis transformed into world space. Detection uses the actual animated barrel pose after updating its ancestor transforms, so commanded angles do not score hits before the gun turns. Each live drone has a simplified sphere of **1.5 scene units** around its center. The nearest forward intersection within **250 scene units** destroys one drone; targets behind the muzzle, missed spheres, and queued drones are unaffected. The camera does not affect aiming.
+
+The first shot appears as the firing effects start; subsequent shots follow the existing streak emission budget of up to **19 shots per simulation second**, scaled by barrel drive. These are illustrative gameplay settings. Hits are instantaneous; the visible streaks are cosmetic and do not model projectile flight, gravity, or travel time.
+
+A hit removes both airframe instances and the radar target immediately, bursts fire, sparks, a shockwave, and smoke at the drone's world position, and increments **killed** exactly once. A drone that reaches the mount instead increments **impacts**, without awarding a kill. The radar has a persistent kill counter, also repeated in the swarm controls. Clearing drones resets both counters and all effects.
+
+## Radar
+
+The bottom-right radar shows live drone positions in a **north-up X/Z view**, centered on the fixed gun origin. +Z is north (top) and +X is east (right), independent of the camera. A white central arrow follows the gun's current animated azimuth. Green blips have short movement trails and brighten as the scan sweeps past them; nearby drones turn amber. Their positions update every visible scene frame, regardless of the scan angle.
+
+The range starts at 50 scene units and expands in 25-unit steps to include more distant drones. It stays stable while a swarm is in flight or queued, then resets when the airspace is clear. Hover or touch a blip to show its ID, distance from the origin, and height; height is shown separately from the top-down position. Live and queued counts appear in the header. Blips disappear immediately on impact or Clear, and queued drones appear only when launched.
+
+The radar uses its own lightweight 2D canvas and receives the same `radarData` snapshot format as the controller. It follows the scene's pause/lifecycle behavior. On smaller screens it shrinks and sits above the editor, with the compass alongside it and the swarm controls scrolling in the remaining space.
 
 ## Code editor and simulation
 
 The CodeMirror editor starts with:
 
 ```js
-function updateGun(elapsedTime, deltaTime) {
+function updateGun(elapsedTime, deltaTime, radarData) {
 
 }
 ```
@@ -64,12 +80,20 @@ Drag the editor's **top-right resize handle** to change its width and height. Yo
 
 `elapsedTime` is elapsed simulation time in **seconds**, starting at **0** on the first callback of each run. `deltaTime` is the simulation time since the previous callback. The scene retains its maximum timestep of **0.05 seconds**; if the worker is still busy, subsequent frames accumulate into the next callback's `deltaTime` instead of queueing work. The simulation clock pauses while the tab is hidden. Each new run resets the clock and variables declared in the editor; it keeps the gun's current pose. Editing while running applies to the next run after stopping.
 
+The third parameter, `radarData`, is a fresh array of **live targets only**:
+
+```js
+[{ id: 1, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]
+```
+
+`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed gun origin in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Existing two-parameter controllers continue to work.
+
 The five gun API functions are available directly inside the code, with no imports or `window.phalanx` prefix. Angles are in **radians**. For example:
 
 ```js
 let nextShot = 0;
 
-function updateGun(elapsedTime, deltaTime) {
+function updateGun(elapsedTime, deltaTime, radarData) {
   setAzimuth(elapsedTime * 0.4);
   setAltitude(Math.PI / 6 + Math.sin(elapsedTime) * 0.1);
 
@@ -82,7 +106,7 @@ function updateGun(elapsedTime, deltaTime) {
 
 Variables outside `updateGun` persist between frames within a run. Syntax errors, missing callbacks, thrown values, and runtime errors appear below the editor, with source line information when available. Errors stop the worker without stopping the scene. `updateGun` must be synchronous. Calling `fire()` on every update keeps extending the burst until the simulation is stopped.
 
-The VM exposes only the five gun functions and standard JavaScript built-ins. It cannot access the page, browser storage, networking, timers, worker messaging, or the app's objects. Getters read a snapshot of the current scene angles at the start of each callback. Commands are validated and applied only after a callback succeeds; commands from a failed or stopped callback are discarded.
+The VM exposes the five gun functions, the callback's `radarData` parameter, and standard JavaScript built-ins. It cannot access the page, browser storage, networking, timers, worker messaging, or the app's objects. Getters read a snapshot of the current scene angles at the start of each callback. Commands are validated and applied only after a callback succeeds; commands from a failed or stopped callback are discarded.
 
 Each script has a **32 MiB guest heap**, a **256 KiB stack**, and a **200 ms execution limit** during compilation and each callback. An independent watchdog terminates an unresponsive worker. Source is limited to **64K characters**, with at most **128 gun commands per callback**. Infinite loops, memory exhaustion, and worker failures are reported in the editor. These limits protect the interactive scene; execution remains entirely local.
 
@@ -112,7 +136,7 @@ The same functions are available as `window.phalanx.setAzimuth(rad)`, `window.ph
 
 All angles use **radians**. Azimuth commands wrap around the circle and retain the existing shortest-path smoothing. `getCurrentAzimuth()` returns the current animated bearing in `[0, 2π)`. Altitude means the barrel inclination above horizontal; it is clamped to the existing **−15° to +85°** range (approximately **−0.262 to +1.484 rad**), with an initial inclination of **10°**. The getters return the current animated pose, so they may differ from a newly commanded angle while the mount moves. Setters reject non-finite values and non-number inputs with `TypeError`.
 
-`fire()` starts a **0.7-second visual burst** using the existing barrel spin, muzzle flash, smoke, and streak effects. Calling it again extends the burst to 0.7 seconds from the latest call. Losing focus or hiding the page cancels firing. Sound remains disabled.
+`fire()` starts a **0.7-second burst** using barrel spin, muzzle flash, smoke, and streak effects, with gun hit detection on each emitted streak. Calling it again extends the burst to 0.7 seconds from the latest call. Losing focus or hiding the page cancels firing. Sound remains disabled.
 
 ## Model and rig
 
@@ -147,11 +171,12 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `index.html` | Scene, compass, code-editor panel, and Vite entry point |
 | `styles.css` | Scene, compass, and editor layout |
 | `src/main.js` | Existing scene setup, orbit controls, compass, lifecycle, and render loop |
-| `src/api.js` | Radian angle commands, current-angle getters, and visual burst control |
+| `src/api.js` | Radian angle commands, current-angle getters, and firing burst control |
 | `src/scene-gui.js` | Swarm controls, live counts, and development-only gun API controls |
-| `src/drones.js` | System-owned timed launch queue, validated spherical spawning, instanced flights, and lifecycle |
+| `src/drones.js` | Timed launches, instanced flights, radar snapshots, gun hit detection, destruction, and counters |
 | `src/drone-model.js` | Original merged delta-wing airframe geometry and shared materials |
 | `src/impact-effects.js` | Bounded pools of large fireballs, flame lobes, shockwaves, sparks, smoke, and light |
+| `src/radar.js` | Read-only live radar, scan sweep, trails, automatic range, hover details, and canvas lifecycle |
 | `src/code-editor.js` | CodeMirror JavaScript editor, API completion, Run/Stop toggle, and error status |
 | `src/editor-panel.js` | Pointer/keyboard resizing, collapse/expand behavior, and compass spacing |
 | `src/simulation.js` | Worker lifecycle, frame scheduling, validated API bridge, and watchdogs |
@@ -162,7 +187,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `src/model.js` | Procedural model, materials, exterior details, component anchors, and joint hierarchy |
 | `src/motion.js` | Viewer limits, angle wrapping, and frame-rate-independent motion smoothing |
 | `src/environment.js` | Deck, studio, ocean, generated surface textures, lighting, and environment reflections |
-| `src/effects.js` | Cosmetic flash, smoke, light streaks, and optional synthesized sound |
+| `src/effects.js` | Flash, smoke, light streaks, per-shot hit callback, and optional synthesized sound |
 | `tests/api.test.js` | API behavior and lifecycle tests using Node's built-in test runner |
 | `tests/simulation.test.js` | Actual worker execution, API integration, error recovery, isolation, and resource limits |
 | `tests/drones.test.js` | Spawn bounds, launch/impact spacing, frame timing, queue cancellation, effects, and disposal |
@@ -170,11 +195,11 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `package.json` / `package-lock.json` | npm scripts and reproducible dependency versions |
 | `dist/` | Generated production output; run `npm run build` to create it |
 
-The app also retains `window.phalanx.getState()` and `window.phalanx.getStats()` for inspection in browser developer tools, plus references to the model, scene, and camera. The model geometry, environment, effects, and original motion module are unchanged.
+The app also retains `window.phalanx.getState()` and `window.phalanx.getStats()` for inspection in browser developer tools, plus references to the model, scene, and camera.
 
 ## Scope and accuracy
 
-This is an **exterior visual replica**, not a measured or verified engineering digital twin. Forms and proportions are interpreted from public references. It has no live connection to a real machine. Internal mechanisms, sensor behavior, and firing physics are not modeled. Smoke and streaks are visual effects; the audio is synthesized. The movement range and timing are selected for comfortable viewing and are not specifications for the real equipment.
+This is an **exterior visual replica**, not a measured or verified engineering digital twin. Forms and proportions are interpreted from public references. It has no live connection to a real machine. Internal mechanisms, sensor behavior, and physical ballistics are not modeled; gun hits use the simplified gameplay rules above. Smoke and streaks are visual effects; the audio is synthesized. The movement range and timing are selected for comfortable viewing and are not specifications for the real equipment.
 
 The API angle limits and burst timing are viewer controls and are not specifications for the real equipment.
 

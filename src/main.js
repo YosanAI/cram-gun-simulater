@@ -6,6 +6,7 @@ import { createFiringEffects } from './effects.js';
 import { MOTION } from './motion.js';
 import { createCodeEditor } from './code-editor.js';
 import { createDroneSwarm } from './drones.js';
+import { createRadar } from './radar.js';
 import {
   setAzimuth, setAltitude, getCurrentAzimuth, getCurrentAltitude, fire,
   advanceMotion, getSceneState, stopFiring,
@@ -60,8 +61,10 @@ async function start() {
   const model = createPhalanx();
   scene.add(model.root);
   model.elevation.rotation.x = -getCurrentAltitude();
-  const effects = createFiringEffects(scene, model.muzzle);
   const drones = createDroneSwarm(scene);
+  const effects = createFiringEffects(scene, model.muzzle, { onShot: (origin, direction) => drones.fireRay(origin, direction) });
+  const radar = createRadar();
+  radar.update(0, getCurrentAzimuth(), drones.getRadarData(), drones.getState());
 
   function stopInput() {
     stopFiring();
@@ -116,6 +119,7 @@ async function start() {
     codeEditor?.destroy();
     effects.dispose();
     drones.dispose();
+    radar.destroy();
     environment.dispose();
     controls.dispose();
     renderer.dispose();
@@ -158,15 +162,16 @@ async function start() {
     lastTime = now;
     if (document.hidden) return;
     // Send the frame to the sandbox without blocking rendering.
-    codeEditor.tick(dt);
+    codeEditor.tick(dt, drones.getRadarData());
     const state = advanceMotion(dt);
     model.azimuth.rotation.y = state.azimuth * DEG;
     model.elevation.rotation.x = -state.elevation * DEG;
     model.barrels.rotation.z = (model.barrels.rotation.z + MOTION.barrelAngularSpeed * state.drive * dt) % (Math.PI * 2);
+    drones.update(dt);
     effects.setEnabled(state.firing);
     effects.update(dt, state.elapsed, state.drive);
     environment.update(dt, state.elapsed);
-    drones.update(dt);
+    radar.update(dt, state.azimuth * DEG, drones.getRadarData(), drones.getState());
 
     controls.update(dt);
     scene.updateMatrixWorld();

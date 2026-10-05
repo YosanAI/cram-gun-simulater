@@ -12,6 +12,7 @@ body {
 }
 
 .stage {
+  --radar-width: 260px;
   position: relative;
   width: 100%;
   height: 100dvh;
@@ -36,7 +37,7 @@ body {
 .orientation {
   position: absolute;
   bottom: 24px;
-  right: 30px;
+  right: calc(var(--radar-width) + 36px);
   width: 49px;
   text-align: center;
   opacity: .72;
@@ -66,7 +67,7 @@ body {
   top: 20px;
   right: 20px;
   width: min(280px, calc(100vw - 24px));
-  max-height: calc(100dvh - 40px);
+  max-height: max(64px, calc(100dvh - var(--radar-panel-height, 326px) - 60px));
   overflow: auto;
   z-index: 3;
   border-radius: 6px;
@@ -91,9 +92,112 @@ body {
   pointer-events: none;
 }
 
+.radar-widget {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: var(--radar-width);
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  z-index: 2;
+  border: 1px solid #679d8366;
+  border-radius: 12px;
+  background: #081917f2;
+  box-shadow: 0 12px 36px #0007, inset 0 0 22px #58d6a00a;
+  color: #9ad6b9;
+  font: 10px Consolas, "Liberation Mono", monospace;
+}
+
+.radar-header,
+.radar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.radar-header {
+  min-height: 20px;
+}
+
+.radar-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #d9ffe9;
+  font: 600 11px system-ui, sans-serif;
+  letter-spacing: 1.5px;
+}
+
+.radar-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #89ffc0;
+  box-shadow: 0 0 8px #89ffc099;
+}
+
+#radar-count {
+  color: #80b59c;
+  font-size: 9px;
+  text-align: right;
+}
+
+.radar-screen {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #84daa82a;
+  border-radius: 50%;
+}
+
+.radar-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, #00100f33 2px 3px);
+}
+
+#radar-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.radar-footer {
+  min-height: 12px;
+  color: #60977f;
+  font-size: 8px;
+  letter-spacing: .4px;
+}
+
+#radar-range {
+  color: #a5e8c6;
+}
+
+.radar-detail {
+  min-height: 13px;
+  color: #76ac93;
+  font-size: 9px;
+  text-align: center;
+}
+
+.radar-kills {
+  color: #ffc477;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
 .script-panel {
   --panel-inset: 20px;
-  --panel-right-inset: 100px;
+  --panel-right-inset: 360px;
   --panel-top-inset: 20px;
   position: absolute;
   left: var(--panel-inset);
@@ -293,8 +397,31 @@ body {
 }
 
 @media (max-width: 900px) {
+  .stage {
+    --radar-width: clamp(140px, calc(100dvh - var(--editor-panel-height, min(420px, 60dvh)) - 210px), 200px);
+  }
+
+  .radar-widget {
+    bottom: calc(var(--editor-panel-height, min(420px, 60dvh)) + 26px);
+    padding: 9px;
+  }
+
+  .radar-header {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
+  .scene-controls {
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(420px, 60dvh)) - var(--radar-panel-height, 230px) - 60px));
+  }
+
+  .script-panel {
+    --panel-right-inset: 20px;
+    --panel-top-inset: 320px;
+  }
+
   .orientation {
-    right: 23px;
+    bottom: calc(var(--editor-panel-height, min(420px, 60dvh)) + 26px);
     width: 39px;
   }
 
@@ -308,13 +435,13 @@ body {
   .scene-controls {
     top: 12px;
     right: 12px;
-    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(350px, 48dvh)) - 40px));
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, min(350px, 48dvh)) - var(--radar-panel-height, 230px) - 52px));
   }
 
   .script-panel {
     --panel-inset: 12px;
     --panel-right-inset: 12px;
-    --panel-top-inset: 90px;
+    --panel-top-inset: 320px;
     width: var(--editor-width, calc(100vw - 24px));
     height: var(--editor-height, min(350px, 48dvh));
   }
@@ -335,6 +462,47 @@ body {
 
   .orientation {
     bottom: calc(var(--editor-panel-height, min(350px, 48dvh)) + 26px);
-    right: 16px;
+    right: calc(var(--radar-width) + 28px);
+  }
+
+  .radar-widget {
+    right: 12px;
+  }
+}
+
+@media (max-width: 600px) and (max-height: 600px) {
+  .stage {
+    --radar-width: 120px;
+  }
+
+  .script-panel {
+    --panel-top-inset: 240px;
+  }
+
+  .scene-controls {
+    left: 12px;
+    right: auto;
+    width: min(280px, calc(100vw - var(--radar-width) - 44px));
+    max-height: max(64px, calc(100dvh - var(--editor-panel-height, 260px) - 114px));
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) and (max-height: 600px) {
+  .stage {
+    --radar-width: 140px;
+  }
+
+  .radar-widget,
+  .orientation {
+    bottom: 20px;
+  }
+
+  .script-panel {
+    --panel-right-inset: 240px;
+    --panel-top-inset: 20px;
+  }
+
+  .scene-controls {
+    max-height: max(64px, calc(100dvh - var(--radar-panel-height, 210px) - 60px));
   }
 }

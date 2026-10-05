@@ -24,6 +24,18 @@
       </svg>
     </div>
     <aside id="scene-controls" class="scene-controls" aria-label="Drone swarm and scene controls"></aside>
+    <section id="radar-widget" class="radar-widget" aria-labelledby="radar-title">
+      <header class="radar-header">
+        <h2 id="radar-title"><span class="radar-live-dot" aria-hidden="true"></span>RADAR</h2>
+        <span id="radar-count">0 live / 0 queued</span>
+      </header>
+      <div class="radar-screen">
+        <canvas id="radar-canvas" role="img" aria-label="Drone radar, north up, gun at center.">Live drone radar</canvas>
+      </div>
+      <div class="radar-footer"><span id="radar-range">RNG 50 u</span><span>NORTH UP · X/Z</span></div>
+      <output id="radar-kills" class="radar-kills" aria-label="Drones killed">0 killed</output>
+      <output id="radar-detail" class="radar-detail">Airspace clear</output>
+    </section>
     <section id="script-panel" class="script-panel" aria-labelledby="script-title" data-running="false" data-collapsed="false">
       <button id="resize-editor" class="script-resize" type="button" aria-label="Resize editor" title="Drag to resize; arrow keys adjust size">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 12 8-8M4 8v4h4M8 4h4v4"/></svg>
@@ -44,6 +56,7 @@
         <div id="code-editor"></div>
         <div class="script-reference">
           <span>elapsedTime, deltaTime: seconds · angles: radians</span>
+          <code>radarData: [{ id, pos: { x, y, z }, distance }]</code>
           <code>setAzimuth(rad) · setAltitude(rad) · fire()</code>
           <code>getCurrentAzimuth() · getCurrentAltitude()</code>
         </div>

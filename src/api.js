@@ -40,7 +40,7 @@ export function getCurrentAltitude() {
   return state.elevation * DEG;
 }
 
-/** Start a short visual burst; repeated calls extend it from the latest call. */
+/** Start a short firing burst; repeated calls extend it from the latest call. */
 export function fire() {
   if (elapsed >= firingUntil) burstTime = 0;
   firingUntil = elapsed + BURST_DURATION;

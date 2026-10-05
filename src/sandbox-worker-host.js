@@ -9,7 +9,7 @@ export function createSandboxWorkerHost(loadQuickJS, send) {
         sandbox = createGunSandbox(await loadQuickJS(), message.source, message.pose);
         send({ type: 'ready' });
       } else if (message.type === 'frame' && sandbox) {
-        const commands = sandbox.tick(message.elapsedTime, message.deltaTime, message.pose);
+        const commands = sandbox.tick(message.elapsedTime, message.deltaTime, message.pose, message.radarData);
         send({ type: 'frame', id: message.id, commands });
       } else {
         throw new Error('Invalid sandbox request.');

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 
 /**
- * Cosmetic firing effects. The muzzle's local +Z axis points down the barrels.
+ * Firing visuals and per-shot callback. The muzzle's local +Z points down the barrels.
  * Smoke and streaks leave that moving frame and continue in world space.
  * Audio is opt-in and must first be unlocked by a pointer / keyboard gesture.
  */
-export function createFiringEffects(scene, muzzle) {
+export function createFiringEffects(scene, muzzle, { onShot = () => {} } = {}) {
   const SMOKE_COUNT = 40;
   const STREAK_COUNT = 28;
   const smokeParticles = createParticles(SMOKE_COUNT);
@@ -204,6 +204,8 @@ export function createFiringEffects(scene, muzzle) {
     particle.position.copy(origin).addScaledVector(forward, 0.55);
     particle.velocity.copy(forward).multiplyScalar(57 + Math.random() * 15);
     particle.orientation.copy(orientation);
+    // Each emitted streak represents one instantaneous gameplay shot.
+    onShot(origin, forward);
   }
 
   function update(dt, time, intensity = 0) {
@@ -237,7 +239,11 @@ export function createFiringEffects(scene, muzzle) {
       smokeBudget += elapsed * 8 * level;
       streakBudget += elapsed * 19 * level;
       while (smokeBudget >= 1) { emitSmoke(); smokeBudget -= 1; }
-      while (streakBudget >= 1) { emitStreak(); streakBudget -= 1; }
+      // Roundoff at a shot boundary must not change the count with frame size.
+      while (streakBudget >= 1 - 1e-9) {
+        emitStreak();
+        streakBudget = Math.max(0, streakBudget - 1);
+      }
     } else {
       flashLight.intensity = 0;
       smokeBudget = 0;

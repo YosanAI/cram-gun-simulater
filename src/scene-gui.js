@@ -52,7 +52,7 @@ export function createSceneGui({ drones, includeGunControls = false }) {
   function updateStatus() {
     if (statusError) return;
     const state = drones.getState();
-    const message = state.active + ' in flight · ' + state.queued + ' queued · ' + state.impacts + ' impacts';
+    const message = state.active + ' in flight · ' + state.queued + ' queued · ' + state.killed + ' killed · ' + state.impacts + ' impacts';
     if (previousStatus !== message || status.classList.contains('controls-error')) {
       status.textContent = message;
       status.classList.remove('controls-error');

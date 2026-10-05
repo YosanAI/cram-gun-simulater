@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
-import { createDroneSwarm, DRONE_LIMITS } from '../src/drones.js';
+import { createDroneSwarm, DRONE_LIMITS, GUN_HIT_LIMITS } from '../src/drones.js';
 import { createImpactEffects } from '../src/impact-effects.js';
+import { createFiringEffects } from '../src/effects.js';
 
 function seededRandom() {
   let seed = 1234;
@@ -75,13 +76,13 @@ test('crossing the origin triggers one impact, removes the drone, and lets the e
   const { scene, swarm } = harness(t, { onImpact: impact => impacts.push(impact) });
   swarm.queueSwarm({ count: 1, minRadius: 5, maxRadius: 5, speed: 20 });
   swarm.update(1);
-  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, impacts: 1, explosions: 1 });
+  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, killed: 0, impacts: 1, explosions: 1 });
   assert.equal(impacts.length, 1);
   assert.equal(impacts[0].position.length(), 0);
   assert.equal(scene.getObjectByName('Delta-wing airframes').count, 0);
   assert.equal(scene.getObjectByName('Impact fireballs').count, 1);
   swarm.update(6);
-  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, impacts: 1, explosions: 0 });
+  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, killed: 0, impacts: 1, explosions: 0 });
   assert.equal(impacts.length, 1);
   assert.equal(scene.getObjectByName('Impact fireballs').count, 0);
   assert.equal(scene.getObjectByName('Impact sparks').geometry.drawRange.count, 0);
@@ -113,10 +114,10 @@ test('a large queued swarm stays within the effect pool, and Clear resets flight
   assert.ok(meshes.every(mesh => mesh.isInstancedMesh && mesh.count === 1));
   assert.equal(swarm.getState().queued, 199);
   swarm.update(20.25);
-  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, impacts: 200, explosions: 32 });
+  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, killed: 0, impacts: 200, explosions: 32 });
   swarm.queueSwarm({ count: 3 });
   swarm.clear();
-  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, impacts: 0, explosions: 0 });
+  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, killed: 0, impacts: 0, explosions: 0 });
   assert.ok(meshes.every(mesh => mesh.count === 0));
   assert.equal(scene.getObjectByName('Impact sparks').geometry.drawRange.count, 0);
   assert.equal(swarm.queueSwarm({ count: 200 }).length, 200);
@@ -222,7 +223,7 @@ test('Clear cancels every pending launch and the next swarm can start immediatel
   assert.equal(swarm.getState().queued, 3);
   swarm.clear();
   swarm.update(20);
-  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, impacts: 0, explosions: 0 });
+  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, killed: 0, impacts: 0, explosions: 0 });
   assert.equal(hits.length, 0);
   swarm.queueSwarm({ count: 1 });
   assert.equal(swarm.getState().active, 1);
@@ -254,4 +255,125 @@ test('large fireballs include layered flames and a growing shockwave, then clean
     assert.equal(scene.getObjectByName(name).count, 0);
   }
   assert.equal(scene.getObjectByName('Impact sparks').geometry.drawRange.count, 0);
+});
+
+test('radar snapshots contain only live target IDs, plain positions, and scalar distances', t => {
+  const { swarm } = harness(t);
+  const ids = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, speed: 4, randomDirections: false, altitude: 0 });
+  const snapshot = swarm.getRadarData();
+  assert.deepEqual(snapshot, [{ id: ids[0], pos: { x: 0, y: 0, z: 10 }, distance: 10 }]);
+  snapshot[0].pos.z = 999;
+  snapshot.pop();
+  swarm.update(0.5);
+  assert.deepEqual(swarm.getRadarData(), [{ id: ids[0], pos: { x: 0, y: 0, z: 8 }, distance: 8 }]);
+  swarm.clear();
+  assert.deepEqual(swarm.getRadarData(), []);
+});
+
+test('a gun hit removes the live drone once, explodes in the air, and counts a kill without a mount impact', t => {
+  const mountImpacts = [];
+  const { scene, swarm } = harness(t, { onImpact: hit => mountImpacts.push(hit) });
+  const [id] = swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, altitude: Math.PI / 6 });
+  const position = swarm.getDrones()[0].position;
+  const origin = new THREE.Vector3(0, 3, 2);
+  const direction = position.clone().sub(origin).normalize();
+  const hit = swarm.fireRay(origin, direction);
+  assert.equal(hit.id, id);
+  assert.ok(hit.position.distanceTo(position) < 1e-9);
+  assert.deepEqual(swarm.getState(), { active: 0, queued: 0, killed: 1, impacts: 0, explosions: 1 });
+  assert.deepEqual(swarm.getRadarData(), []);
+  assert.equal(scene.getObjectByName('Delta-wing airframes').count, 0);
+  assert.equal(scene.getObjectByName('Airframe trailing-edge details').count, 0);
+  const matrix = new THREE.Matrix4();
+  scene.getObjectByName('Impact fireballs').getMatrixAt(0, matrix);
+  const fireballPosition = new THREE.Vector3().setFromMatrixPosition(matrix);
+  assert.ok(Math.abs(fireballPosition.y - position.y - 1) < 1e-6);
+  assert.ok(Math.abs(fireballPosition.z - position.z) < 1e-6);
+  assert.equal(swarm.fireRay(origin, direction), null);
+  swarm.update(6);
+  assert.equal(swarm.getState().killed, 1);
+  assert.equal(swarm.getState().explosions, 0);
+  assert.deepEqual(mountImpacts, []);
+  swarm.clear();
+  assert.equal(swarm.getState().killed, 0);
+});
+
+test('a shot hits only the nearest intersected drone and never destroys queued drones', t => {
+  const { swarm } = harness(t);
+  const [farId] = swarm.queueSwarm({ count: 1, minRadius: 30, maxRadius: 30, randomDirections: false, altitude: 0 });
+  const [nearId, queuedId] = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, randomDirections: false, altitude: 0 });
+  swarm.update(0.8);
+  const origin = new THREE.Vector3();
+  const direction = new THREE.Vector3(0, 0, 1);
+  assert.equal(swarm.fireRay(origin, direction).id, nearId);
+  assert.deepEqual(swarm.getRadarData().map(target => target.id), [farId]);
+  assert.equal(swarm.fireRay(origin, direction).id, farId);
+  assert.equal(swarm.fireRay(origin, direction), null);
+  assert.equal(swarm.getState().queued, 1);
+  swarm.update(0.8);
+  assert.deepEqual(swarm.getRadarData().map(target => target.id), [queuedId]);
+  assert.equal(swarm.getState().killed, 2);
+});
+
+test('hit detection rejects misses, targets behind the muzzle, and targets beyond range', t => {
+  const { swarm } = harness(t);
+  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, altitude: 0 });
+  const forward = new THREE.Vector3(0, 0, 1);
+  assert.equal(swarm.fireRay(new THREE.Vector3(), new THREE.Vector3(1, 0, 0)), null);
+  assert.equal(swarm.fireRay(new THREE.Vector3(), new THREE.Vector3()), null);
+  assert.equal(swarm.fireRay(new THREE.Vector3(0, 0, 30), forward), null);
+  assert.equal(swarm.fireRay(new THREE.Vector3(0, 0, -GUN_HIT_LIMITS.range), forward), null);
+  assert.equal(swarm.fireRay(new THREE.Vector3(GUN_HIT_LIMITS.radius + 0.01, 0, 0), forward), null);
+  assert.equal(swarm.getState().active, 1);
+  assert.equal(swarm.getState().killed, 0);
+  assert.ok(swarm.fireRay(new THREE.Vector3(GUN_HIT_LIMITS.radius - 0.01, 0, 0), forward));
+});
+
+test('firing effects hit through the current muzzle world transform and disabled firing cannot kill', t => {
+  const { scene, swarm } = harness(t);
+  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, azimuth: Math.PI / 2, altitude: 0 });
+  const rig = new THREE.Group();
+  const muzzle = new THREE.Object3D();
+  muzzle.position.z = 1;
+  rig.add(muzzle);
+  scene.add(rig);
+  scene.updateMatrixWorld(true);
+  // Leave cached world matrices stale, as happens before the render step.
+  rig.rotation.y = Math.PI / 2;
+  let shots = 0;
+  const effects = createFiringEffects(scene, muzzle, {
+    onShot(origin, direction) {
+      shots++;
+      assert.ok(origin.distanceTo(new THREE.Vector3(1, 0, 0)) < 1e-9);
+      assert.ok(direction.distanceTo(new THREE.Vector3(1, 0, 0)) < 1e-9);
+      swarm.fireRay(origin, direction);
+    },
+  });
+  t.after(() => effects.dispose());
+  effects.setEnabled(false);
+  effects.update(0.05, 0.05, 1);
+  assert.equal(shots, 0);
+  assert.equal(swarm.getState().killed, 0);
+  effects.setEnabled(true);
+  effects.update(0.05, 0.1, 1);
+  assert.equal(shots, 1);
+  assert.equal(swarm.getState().killed, 1);
+  assert.equal(swarm.getState().active, 0);
+  effects.setEnabled(false);
+  effects.update(0.05, 0.15, 1);
+  assert.equal(shots, 1);
+});
+
+test('shot emission cadence stays consistent across frame sizes', t => {
+  function countShots(steps, delta) {
+    const scene = new THREE.Scene();
+    const muzzle = new THREE.Object3D();
+    scene.add(muzzle);
+    let shots = 0;
+    const effects = createFiringEffects(scene, muzzle, { onShot: () => shots++ });
+    t.after(() => effects.dispose());
+    for (let frame = 0; frame < steps; frame++) effects.update(delta, frame * delta, 1);
+    return shots;
+  }
+  assert.equal(countShots(100, 0.01), countShots(10, 0.1));
 });

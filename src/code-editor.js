@@ -81,7 +81,7 @@ export function createCodeEditor({ api, onStop }) {
   showStatus('Ready');
 
   return {
-    tick: deltaTime => runner.tick(deltaTime),
+    tick: (deltaTime, radarData) => runner.tick(deltaTime, radarData),
     destroy() {
       runner.stop();
       toggleButton.removeEventListener('click', toggleSimulation);
