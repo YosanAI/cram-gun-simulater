@@ -104,10 +104,10 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
 
   try {
     addFunction('setAzimuth', value => { queue('setAzimuth', angle(value)); });
-    addFunction('setAltitude', value => { queue('setAltitude', angle(value)); });
+    addFunction('setElevation', value => { queue('setElevation', angle(value)); });
     addFunction('fire', () => { queue('fire'); });
     addFunction('getCurrentAzimuth', () => vm.newNumber(pose.azimuth));
-    addFunction('getCurrentAltitude', () => vm.newNumber(pose.altitude));
+    addFunction('getCurrentElevation', () => vm.newNumber(pose.elevation));
 
     addFunction('__reserveConsoleEntry', () => logCount++ < limits.consoleEntries ? vm.true : vm.false);
     addFunction('__writeConsoleEntry', (level, message) => {

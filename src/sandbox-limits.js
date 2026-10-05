@@ -36,7 +36,7 @@ export function validateCommands(commands) {
     if (!Array.isArray(command)) throw new TypeError('Invalid sandbox command.');
     const [name, value] = command;
     if (name === 'fire' && command.length === 1) continue;
-    if ((name === 'setAzimuth' || name === 'setAltitude') && command.length === 2 && Number.isFinite(value)) continue;
+    if ((name === 'setAzimuth' || name === 'setElevation') && command.length === 2 && Number.isFinite(value)) continue;
     throw new TypeError('Invalid sandbox command.');
   }
 }

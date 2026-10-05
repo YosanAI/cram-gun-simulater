@@ -1,5 +1,5 @@
 import { GUI } from 'dat.gui';
-import { ANGLE_LIMITS, setAzimuth, setAltitude, getCurrentAzimuth, getCurrentAltitude, fire } from './api.js';
+import { ANGLE_LIMITS, setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire } from './api.js';
 import { DEFAULT_SWARM, DRONE_LIMITS } from './drones.js';
 
 /** Swarm controls in every build, with gun API testing controls in development. */
@@ -14,7 +14,7 @@ export function createSceneGui({ drones, includeGunControls = false }) {
   host.append(status, gui.domElement);
   const values = {
     azimuth: getCurrentAzimuth(),
-    altitude: getCurrentAltitude(),
+    elevation: getCurrentElevation(),
     fire,
     minRadius: DEFAULT_SWARM.minRadius,
     maxRadius: DEFAULT_SWARM.maxRadius,
@@ -23,7 +23,7 @@ export function createSceneGui({ drones, includeGunControls = false }) {
     spawnInterval: DEFAULT_SWARM.spawnInterval,
     randomDirections: DEFAULT_SWARM.randomDirections,
     spawnAzimuth: DEFAULT_SWARM.azimuth * 180 / Math.PI,
-    spawnAltitude: DEFAULT_SWARM.altitude * 180 / Math.PI,
+    spawnElevation: DEFAULT_SWARM.elevation * 180 / Math.PI,
     spawn() {
       try {
         drones.queueSwarm({
@@ -31,7 +31,7 @@ export function createSceneGui({ drones, includeGunControls = false }) {
           count: values.count, speed: values.speed, randomDirections: values.randomDirections,
           spawnInterval: values.spawnInterval,
           azimuth: values.spawnAzimuth * Math.PI / 180,
-          altitude: values.spawnAltitude * Math.PI / 180,
+          elevation: values.spawnElevation * Math.PI / 180,
         });
         statusError = false;
         updateStatus();
@@ -75,10 +75,10 @@ export function createSceneGui({ drones, includeGunControls = false }) {
   });
   const randomDirections = swarm.add(values, 'randomDirections').name('Random directions');
   const spawnAzimuth = swarm.add(values, 'spawnAzimuth', 0, 360).step(1).name('Azimuth (°)');
-  const spawnAltitude = swarm.add(values, 'spawnAltitude', 0, 90).step(1).name('Altitude (°)');
+  const spawnElevation = swarm.add(values, 'spawnElevation', 0, 90).step(1).name('Elevation (°)');
   swarm.add(values, 'speed', DRONE_LIMITS.minSpeed, DRONE_LIMITS.maxSpeed).step(0.5).name('Speed (units/s)');
   function syncDirectionControls() {
-    for (const controller of [spawnAzimuth, spawnAltitude]) {
+    for (const controller of [spawnAzimuth, spawnElevation]) {
       controller.domElement.classList.toggle('controls-disabled', values.randomDirections);
       controller.domElement.querySelector('input').disabled = values.randomDirections;
     }
@@ -88,13 +88,13 @@ export function createSceneGui({ drones, includeGunControls = false }) {
   swarm.open();
 
   let azimuth;
-  let altitude;
+  let elevation;
   if (includeGunControls) {
     const gun = gui.addFolder('Gun API testing');
     azimuth = gun.add(values, 'azimuth', 0, Math.PI * 2)
       .step(0.001).name('Azimuth (rad)').onChange(setAzimuth);
-    altitude = gun.add(values, 'altitude', ANGLE_LIMITS.minAltitude, ANGLE_LIMITS.maxAltitude)
-      .step(0.001).name('Altitude (rad)').onChange(setAltitude);
+    elevation = gun.add(values, 'elevation', ANGLE_LIMITS.minElevation, ANGLE_LIMITS.maxElevation)
+      .step(0.001).name('Elevation (rad)').onChange(setElevation);
     gun.add(values, 'fire').name('Fire');
     gun.open();
   }
@@ -117,14 +117,14 @@ export function createSceneGui({ drones, includeGunControls = false }) {
       const focused = document.activeElement;
       if (activePointers.size || (focused?.tagName === 'INPUT' && gui.domElement.contains(focused))) return;
       const bearing = getCurrentAzimuth();
-      const inclination = getCurrentAltitude();
+      const inclination = getCurrentElevation();
       if (values.azimuth !== bearing) {
         values.azimuth = bearing;
         azimuth.updateDisplay();
       }
-      if (values.altitude !== inclination) {
-        values.altitude = inclination;
-        altitude.updateDisplay();
+      if (values.elevation !== inclination) {
+        values.elevation = inclination;
+        elevation.updateDisplay();
       }
     },
     destroy() {

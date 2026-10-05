@@ -29,10 +29,10 @@ test('both rotation axes intersect at fixed scene zero and the barrel line cross
   const zero = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   for (const azimuth of [0, 37, 90, 180, 270, 359]) {
-    for (const altitude of [-15, 0, 10, 45, 85]) {
+    for (const elevation of [-15, 0, 10, 45, 85]) {
       for (const spin of [0, 1.2]) {
         model.azimuth.rotation.y = azimuth * DEG;
-        model.elevation.rotation.x = -altitude * DEG;
+        model.elevation.rotation.x = -elevation * DEG;
         model.barrels.rotation.z = spin;
         scene.updateMatrixWorld(true);
         close(model.origin.getWorldPosition(new THREE.Vector3()), zero);
@@ -47,7 +47,7 @@ test('both rotation axes intersect at fixed scene zero and the barrel line cross
         const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(model.elevation.getWorldQuaternion(quaternion));
         close(pitchAxis, new THREE.Vector3(Math.cos(azimuth * DEG), 0, -Math.sin(azimuth * DEG)));
         const direction = model.muzzle.getWorldDirection(new THREE.Vector3());
-        const expected = new THREE.Vector3(Math.sin(azimuth * DEG) * Math.cos(altitude * DEG), Math.sin(altitude * DEG), Math.cos(azimuth * DEG) * Math.cos(altitude * DEG));
+        const expected = new THREE.Vector3(Math.sin(azimuth * DEG) * Math.cos(elevation * DEG), Math.sin(elevation * DEG), Math.cos(azimuth * DEG) * Math.cos(elevation * DEG));
         close(direction, expected);
         const muzzle = model.muzzle.getWorldPosition(new THREE.Vector3());
         close(muzzle, direction.clone().multiplyScalar(3.102));
@@ -59,7 +59,7 @@ test('both rotation axes intersect at fixed scene zero and the barrel line cross
   close(model.root.position, new THREE.Vector3(0, MOUNT_SURFACE_Y, 0));
 });
 
-test('actual gun poses hit radar targets with matching azimuth and altitude about the new origin', t => {
+test('actual gun poses hit radar targets with matching azimuth and elevation about the new origin', t => {
   const { scene, model } = harness(t);
   const swarm = createDroneSwarm(scene, { groundY: MOUNT_SURFACE_Y });
   t.after(() => swarm.dispose());
@@ -75,15 +75,15 @@ test('actual gun poses hit radar targets with matching azimuth and altitude abou
   });
   t.after(() => effects.dispose());
   let time = 0;
-  for (const [azimuth, altitude] of [[0, 10], [90, 30], [225, 65], [350, 85]]) {
+  for (const [azimuth, elevation] of [[0, 10], [90, 30], [225, 65], [350, 85]]) {
     swarm.clear();
-    swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, azimuth: azimuth * DEG, altitude: altitude * DEG });
+    swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, azimuth: azimuth * DEG, elevation: elevation * DEG });
     const radar = swarm.getRadarData()[0];
     target = new THREE.Vector3(radar.pos.x, radar.pos.y, radar.pos.z);
     assert.ok(Math.abs(radar.distance - 20) < 1e-9);
     // Exercise stale cached matrices, as joints are changed before rendering.
     model.azimuth.rotation.y = azimuth * DEG;
-    model.elevation.rotation.x = -altitude * DEG;
+    model.elevation.rotation.x = -elevation * DEG;
     effects.setEnabled(false);
     effects.update(0.05, time += 0.05, 1);
     effects.setEnabled(true);

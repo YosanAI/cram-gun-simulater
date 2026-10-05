@@ -8,7 +8,7 @@ import { createCodeEditor } from './code-editor.js';
 import { createDroneSwarm } from './drones.js';
 import { createRadar } from './radar.js';
 import {
-  setAzimuth, setAltitude, getCurrentAzimuth, getCurrentAltitude, fire,
+  setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
   advanceMotion, getSceneState, stopFiring,
 } from './api.js';
 
@@ -61,7 +61,7 @@ async function start() {
   const model = createPhalanx();
   scene.add(model.root);
   model.azimuth.rotation.y = getCurrentAzimuth();
-  model.elevation.rotation.x = -getCurrentAltitude();
+  model.elevation.rotation.x = -getCurrentElevation();
   const axes = new THREE.AxesHelper(0.7);
   axes.name = 'Fixed rotation axes origin';
   axes.material.depthTest = false;
@@ -103,7 +103,7 @@ async function start() {
   updateCompass();
 
   window.phalanx = Object.freeze({
-    setAzimuth, setAltitude, getCurrentAzimuth, getCurrentAltitude, fire,
+    setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire,
     model, scene, camera,
     getState: getSceneState,
     getStats: () => ({ ...model.getStats(), drawCalls: renderer.info.render.calls, renderedTriangles: renderer.info.render.triangles }),
@@ -154,7 +154,7 @@ async function start() {
   renderer.render(scene, camera);
 
   codeEditor = createCodeEditor({
-    api: { setAzimuth, setAltitude, getCurrentAzimuth, getCurrentAltitude, fire },
+    api: { setAzimuth, setElevation, getCurrentAzimuth, getCurrentElevation, fire },
     onStop: stopInput,
   });
 

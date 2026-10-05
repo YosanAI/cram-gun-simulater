@@ -12,19 +12,19 @@ const closeTo = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e
 test('radian commands preserve smooth motion and getters report the actual pose', async () => {
   const api = await freshApi();
   closeTo(api.getCurrentAzimuth(), 0);
-  closeTo(api.getCurrentAltitude(), 10 * DEG);
+  closeTo(api.getCurrentElevation(), 10 * DEG);
 
   api.setAzimuth(Math.PI / 2);
-  api.setAltitude(Math.PI / 4);
+  api.setElevation(Math.PI / 4);
   closeTo(api.getCurrentAzimuth(), 0);
-  closeTo(api.getCurrentAltitude(), 10 * DEG);
+  closeTo(api.getCurrentElevation(), 10 * DEG);
 
   api.advanceMotion(0.05);
   assert.ok(api.getCurrentAzimuth() > 0 && api.getCurrentAzimuth() < Math.PI / 2);
-  assert.ok(api.getCurrentAltitude() > 10 * DEG && api.getCurrentAltitude() < Math.PI / 4);
+  assert.ok(api.getCurrentElevation() > 10 * DEG && api.getCurrentElevation() < Math.PI / 4);
   settle(api);
   closeTo(api.getCurrentAzimuth(), Math.PI / 2);
-  closeTo(api.getCurrentAltitude(), Math.PI / 4);
+  closeTo(api.getCurrentElevation(), Math.PI / 4);
 });
 
 test('azimuth wraps and travels across north using the shortest path', async () => {
@@ -45,24 +45,24 @@ test('azimuth wraps and travels across north using the shortest path', async () 
   closeTo(api.getCurrentAzimuth(), Math.PI * 1.5);
 });
 
-test('altitude retains the original limits and invalid commands cannot corrupt the pose', async () => {
+test('elevation retains the original limits and invalid commands cannot corrupt the pose', async () => {
   const api = await freshApi();
-  api.setAltitude(Math.PI);
+  api.setElevation(Math.PI);
   settle(api);
-  closeTo(api.getCurrentAltitude(), 85 * DEG);
-  api.setAltitude(-Math.PI);
+  closeTo(api.getCurrentElevation(), 85 * DEG);
+  api.setElevation(-Math.PI);
   settle(api);
-  closeTo(api.getCurrentAltitude(), -15 * DEG);
+  closeTo(api.getCurrentElevation(), -15 * DEG);
 
   for (const value of [NaN, Infinity, -Infinity, '1', null, undefined]) {
     assert.throws(() => api.setAzimuth(value), TypeError);
-    assert.throws(() => api.setAltitude(value), TypeError);
+    assert.throws(() => api.setElevation(value), TypeError);
   }
   api.setAzimuth(Number.MAX_VALUE);
-  api.setAltitude(Number.MAX_VALUE);
+  api.setElevation(Number.MAX_VALUE);
   settle(api);
   assert.ok(Number.isFinite(api.getCurrentAzimuth()));
-  closeTo(api.getCurrentAltitude(), 85 * DEG);
+  closeTo(api.getCurrentElevation(), 85 * DEG);
 });
 
 test('fire starts a finite burst, repeated calls extend it, and the drive winds down', async () => {
@@ -87,13 +87,13 @@ test('fire starts a finite burst, repeated calls extend it, and the drive winds 
 test('a lifecycle interruption cancels firing without changing the commanded angles', async () => {
   const api = await freshApi();
   api.setAzimuth(Math.PI / 3);
-  api.setAltitude(Math.PI / 6);
+  api.setElevation(Math.PI / 6);
   api.fire();
   api.advanceMotion(0.05);
   api.stopFiring();
   assert.equal(api.advanceMotion(0.05).firing, false);
   settle(api);
   closeTo(api.getCurrentAzimuth(), Math.PI / 3);
-  closeTo(api.getCurrentAltitude(), Math.PI / 6);
+  closeTo(api.getCurrentElevation(), Math.PI / 6);
   assert.equal(api.getSceneState().drive, 0);
 });

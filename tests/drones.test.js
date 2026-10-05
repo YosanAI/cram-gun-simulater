@@ -42,14 +42,14 @@ test('random swarms honor their count and radius range across the upper hemisphe
 
 test('fixed bearings match the gun coordinates, including horizon and overhead', t => {
   const { swarm } = harness(t);
-  for (const [azimuth, altitude, expected] of [
+  for (const [azimuth, elevation, expected] of [
     [0, 0, new THREE.Vector3(0, 0, 10)],
     [Math.PI / 2, 0, new THREE.Vector3(10, 0, 0)],
     [Math.PI, Math.PI / 6, new THREE.Vector3(0, 5, -Math.sqrt(75))],
     [0, Math.PI / 2, new THREE.Vector3(0, 10, 0)],
   ]) {
     swarm.clear();
-    swarm.queueSwarm({ count: 1, minRadius: 10, maxRadius: 10, randomDirections: false, azimuth, altitude });
+    swarm.queueSwarm({ count: 1, minRadius: 10, maxRadius: 10, randomDirections: false, azimuth, elevation });
     assert.ok(swarm.getDrones()[0].position.distanceTo(expected) < 1e-10);
   }
 });
@@ -96,7 +96,7 @@ test('invalid settings or capacity overflow reject a whole spawn without changin
     { count: 0 }, { count: 1.5 }, { count: NaN }, { count: '2' },
     { count: DRONE_LIMITS.maxActive }, { minRadius: 40, maxRadius: 20 },
     { minRadius: 0 }, { maxRadius: 201 }, { speed: Infinity }, { speed: 0 },
-    { altitude: -1 }, { altitude: Math.PI }, { azimuth: '1' }, { randomDirections: 'yes' },
+    { elevation: -1 }, { elevation: Math.PI }, { azimuth: '1' }, { randomDirections: 'yes' },
     { spawnInterval: 0 }, { spawnInterval: -1 }, { spawnInterval: 11 },
     { spawnInterval: NaN }, { spawnInterval: '0.8' },
   ]) {
@@ -259,7 +259,7 @@ test('large fireballs include layered flames and a growing shockwave, then clean
 
 test('radar snapshots contain only live target IDs, plain positions, and scalar distances', t => {
   const { swarm } = harness(t);
-  const ids = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, speed: 4, randomDirections: false, altitude: 0 });
+  const ids = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, speed: 4, randomDirections: false, elevation: 0 });
   const snapshot = swarm.getRadarData();
   assert.deepEqual(snapshot, [{ id: ids[0], pos: { x: 0, y: 0, z: 10 }, distance: 10 }]);
   snapshot[0].pos.z = 999;
@@ -273,7 +273,7 @@ test('radar snapshots contain only live target IDs, plain positions, and scalar 
 test('a gun hit removes the live drone once, explodes in the air, and counts a kill without a mount impact', t => {
   const mountImpacts = [];
   const { scene, swarm } = harness(t, { onImpact: hit => mountImpacts.push(hit) });
-  const [id] = swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, altitude: Math.PI / 6 });
+  const [id] = swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, elevation: Math.PI / 6 });
   const position = swarm.getDrones()[0].position;
   const origin = new THREE.Vector3(0, 3, 2);
   const direction = position.clone().sub(origin).normalize();
@@ -300,8 +300,8 @@ test('a gun hit removes the live drone once, explodes in the air, and counts a k
 
 test('a shot hits only the nearest intersected drone and never destroys queued drones', t => {
   const { swarm } = harness(t);
-  const [farId] = swarm.queueSwarm({ count: 1, minRadius: 30, maxRadius: 30, randomDirections: false, altitude: 0 });
-  const [nearId, queuedId] = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, randomDirections: false, altitude: 0 });
+  const [farId] = swarm.queueSwarm({ count: 1, minRadius: 30, maxRadius: 30, randomDirections: false, elevation: 0 });
+  const [nearId, queuedId] = swarm.queueSwarm({ count: 2, minRadius: 10, maxRadius: 10, randomDirections: false, elevation: 0 });
   swarm.update(0.8);
   const origin = new THREE.Vector3();
   const direction = new THREE.Vector3(0, 0, 1);
@@ -317,7 +317,7 @@ test('a shot hits only the nearest intersected drone and never destroys queued d
 
 test('hit detection rejects misses, targets behind the muzzle, and targets beyond range', t => {
   const { swarm } = harness(t);
-  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, altitude: 0 });
+  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, elevation: 0 });
   const forward = new THREE.Vector3(0, 0, 1);
   assert.equal(swarm.fireRay(new THREE.Vector3(), new THREE.Vector3(1, 0, 0)), null);
   assert.equal(swarm.fireRay(new THREE.Vector3(), new THREE.Vector3()), null);
@@ -331,7 +331,7 @@ test('hit detection rejects misses, targets behind the muzzle, and targets beyon
 
 test('firing effects hit through the current muzzle world transform and disabled firing cannot kill', t => {
   const { scene, swarm } = harness(t);
-  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, azimuth: Math.PI / 2, altitude: 0 });
+  swarm.queueSwarm({ count: 1, minRadius: 20, maxRadius: 20, randomDirections: false, azimuth: Math.PI / 2, elevation: 0 });
   const rig = new THREE.Group();
   const muzzle = new THREE.Object3D();
   muzzle.position.z = 1;

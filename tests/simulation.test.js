@@ -23,9 +23,9 @@ function createHarness(t, { api: suppliedApi, ...overrides } = {}) {
   const workers = [];
   const api = suppliedApi || {
     setAzimuth: rad => calls.push(['azimuth', rad]),
-    setAltitude: rad => calls.push(['altitude', rad]),
+    setElevation: rad => calls.push(['elevation', rad]),
     getCurrentAzimuth: () => 1.2,
-    getCurrentAltitude: () => 0.4,
+    getCurrentElevation: () => 0.4,
     fire: () => calls.push(['fire']),
   };
   const createWorker = () => {
@@ -79,10 +79,10 @@ test('the empty template runs in a real worker and idle frames execute no code',
 
 test('frame timing and all five gun functions pass through the isolated API bridge', async t => {
   const h = createHarness(t);
-  assert.equal(await h.run('function updateGun(t, dt) { setAzimuth(getCurrentAzimuth()+t); setAltitude(getCurrentAltitude()+dt); fire(); }'), true);
+  assert.equal(await h.run('function updateGun(t, dt) { setAzimuth(getCurrentAzimuth()+t); setElevation(getCurrentElevation()+dt); fire(); }'), true);
   await h.step(0.02);
   await h.step(0.03);
-  assert.deepEqual(h.calls.map(call => call[0]), ['azimuth', 'altitude', 'fire', 'azimuth', 'altitude', 'fire']);
+  assert.deepEqual(h.calls.map(call => call[0]), ['azimuth', 'elevation', 'fire', 'azimuth', 'elevation', 'fire']);
   for (const [index, expected] of [[0, 1.2], [1, 0.42], [3, 1.22], [4, 0.43]]) {
     assert.ok(Math.abs(h.calls[index][1] - expected) < 1e-12);
   }
@@ -100,7 +100,7 @@ test('the third callback parameter delivers fresh radar data through the real wo
       if (radarData.length) {
         if (previous && radarData === previous) throw new Error("Expected fresh snapshot");
         setAzimuth(radarData[0].id);
-        setAltitude(radarData[0].pos.y);
+        setElevation(radarData[0].pos.y);
         setAzimuth(radarData[0].distance);
         previous = radarData;
         radarData[0].pos.y = 999;
@@ -115,15 +115,15 @@ test('the third callback parameter delivers fresh radar data through the real wo
   await h.step(0.02, []);
   assert.deepEqual(h.errors, []);
   assert.deepEqual(h.calls, [
-    ['azimuth', 7], ['altitude', 4], ['azimuth', 13],
-    ['azimuth', 7], ['altitude', 4], ['azimuth', 13], ['fire'],
+    ['azimuth', 7], ['elevation', 4], ['azimuth', 13],
+    ['azimuth', 7], ['elevation', 4], ['azimuth', 13], ['fire'],
   ]);
   assert.deepEqual(radarData, [{ id: 7, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]);
 });
 
 test('Stop discards execution and restarting resets the clock and callback closure', async t => {
   const h = createHarness(t);
-  const source = 'let count=0; function updateGun(t) { setAzimuth(++count); setAltitude(t); }';
+  const source = 'let count=0; function updateGun(t) { setAzimuth(++count); setElevation(t); }';
   await h.run(source);
   await h.step(0.02);
   await h.step(0.03);
@@ -134,9 +134,9 @@ test('Stop discards execution and restarting resets the clock and callback closu
   await h.run(source);
   await h.step(0.01);
   assert.deepEqual(h.calls, [
-    ['azimuth', 1], ['altitude', 0],
-    ['azimuth', 2], ['altitude', 0.02],
-    ['azimuth', 1], ['altitude', 0],
+    ['azimuth', 1], ['elevation', 0],
+    ['azimuth', 2], ['elevation', 0.02],
+    ['azimuth', 1], ['elevation', 0],
   ]);
 });
 
@@ -182,7 +182,7 @@ test('thrown primitives and invalid angle arguments display errors', async t => 
     ['throw "string fault";', /string fault/],
     ['throw null;', /null/],
     ['setAzimuth(NaN);', /finite number/],
-    ['setAltitude("1");', /finite number/],
+    ['setElevation("1");', /finite number/],
   ]) {
     await h.run('function updateGun() { ' + body + ' }');
     await h.step(0.02);
@@ -243,7 +243,7 @@ test('excessive commands, rejected promises, and promises that never settle stop
 test('script commands reach the actual gun API and Stop cancels firing', async t => {
   const api = await import('../src/api.js?worker-integration');
   const h = createHarness(t, { api, onStop: api.stopFiring });
-  assert.equal(await h.run('function updateGun() { setAzimuth(Math.PI/2); setAltitude(Math.PI/6); fire(); }'), true);
+  assert.equal(await h.run('function updateGun() { setAzimuth(Math.PI/2); setElevation(Math.PI/6); fire(); }'), true);
   await h.step(0.02);
   assert.equal(api.advanceMotion(0.02).firing, true);
   assert.ok(api.getCurrentAzimuth() > 0);
@@ -257,11 +257,11 @@ test('the guest heap limit rejects oversized allocations', async t => {
   const sandbox = createGunSandbox(
     QuickJS,
     'function updateGun() { const large = "x".repeat(8 * 1024 * 1024); }',
-    { azimuth: 0, altitude: 0 },
+    { azimuth: 0, elevation: 0 },
     { ...SANDBOX_LIMITS, memoryBytes: 1024 * 1024, executionMs: 500 },
   );
   t.after(() => sandbox.dispose());
-  assert.throws(() => sandbox.tick(0, 0.02, { azimuth: 0, altitude: 0 }), /memory/i);
+  assert.throws(() => sandbox.tick(0, 0.02, { azimuth: 0, elevation: 0 }), /memory/i);
 });
 
 test('source and error payloads are bounded before they reach the UI', async t => {
@@ -372,7 +372,7 @@ test('the installed Three.js library and Math work on radar targets inside the r
       const rotated = new THREE.Vector3(0, 0, 1).applyQuaternion(rotation);
       console.log(THREE.REVISION, position.length(), geometry.attributes.position.count, scene.children.length, rotated.x);
       setAzimuth(Math.atan2(x, z));
-      setAltitude(Math.atan2(y, Math.hypot(x, z)));
+      setElevation(Math.atan2(y, Math.hypot(x, z)));
       fire();
     }
   `), true);
@@ -394,7 +394,7 @@ test('ordinary JS helpers, eval, typed arrays, and async computations are availa
     async function updateGun() {
       const values = await Promise.all([controller.bearing(), Promise.resolve(data.reduce((a, b) => a + b, 0))]);
       setAzimuth(values[0]);
-      setAltitude(eval("Math.PI / 6"));
+      setElevation(eval("Math.PI / 6"));
       console.log(new Map([["sum", values[1]]]).get("sum"), new Function("return Math.sqrt(9)")());
       fire();
     }
@@ -402,7 +402,7 @@ test('ordinary JS helpers, eval, typed arrays, and async computations are availa
   await h.step(0.02);
   assert.deepEqual(h.errors, []);
   assert.deepEqual(h.logs, [{ level: 'log', message: '3 3' }]);
-  assert.deepEqual(h.calls, [['azimuth', Math.PI / 2], ['altitude', Math.PI / 6], ['fire']]);
+  assert.deepEqual(h.calls, [['azimuth', Math.PI / 2], ['elevation', Math.PI / 6], ['fire']]);
 });
 
 test('console handles startup output, circular data, and diagnostics before failed commands', async t => {

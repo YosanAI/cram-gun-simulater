@@ -9,8 +9,8 @@ let firingUntil = 0;
 let burstTime = 0;
 
 export const ANGLE_LIMITS = Object.freeze({
-  minAltitude: MOTION.minElevation * DEG,
-  maxAltitude: MOTION.maxElevation * DEG,
+  minElevation: MOTION.minElevation * DEG,
+  maxElevation: MOTION.maxElevation * DEG,
 });
 
 function validateAngle(rad) {
@@ -25,9 +25,9 @@ export function setAzimuth(rad) {
 }
 
 /** Command the barrel inclination in radians, within the existing viewer limits. */
-export function setAltitude(rad) {
+export function setElevation(rad) {
   validateAngle(rad);
-  state.targetElevation = clamp(rad, ANGLE_LIMITS.minAltitude, ANGLE_LIMITS.maxAltitude) / DEG;
+  state.targetElevation = clamp(rad, ANGLE_LIMITS.minElevation, ANGLE_LIMITS.maxElevation) / DEG;
 }
 
 /** Current animated bearing, normalized to [0, 2π), in radians. */
@@ -36,7 +36,7 @@ export function getCurrentAzimuth() {
 }
 
 /** Current animated barrel inclination in radians. */
-export function getCurrentAltitude() {
+export function getCurrentElevation() {
   return state.elevation * DEG;
 }
 

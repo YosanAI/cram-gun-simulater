@@ -29,7 +29,7 @@ Three.js is installed through npm and pinned to **0.180.0**. Vite resolves its i
 
 Drag the scene to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. The compass follows the camera orientation.
 
-The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, an additional **Gun API testing** folder provides **Azimuth (rad)**, **Altitude (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
+The top-right dat.gui panel includes **Drone swarm** controls in development and production. Under `npm run dev`, an additional **Gun API testing** folder provides **Azimuth (rad)**, **Elevation (rad)**, and **Fire**. Both sliders call the public setters, and the button calls `fire()`. While you are not dragging or editing, the panel reads the public getters to show the current animated angles, including changes commanded from other code. The controls scroll on small screens and can be collapsed from the top.
 
 ## Drone swarms
 
@@ -38,7 +38,7 @@ Click **Spawn swarm** to queue drones using the current settings:
 - **Swarm size:** 1–200 drones per request, with at most 200 in flight or waiting to launch.
 - **Spawn interval (s):** 0.1–10 seconds between launches. The initial drone launches immediately; subsequent drones appear one at a time. Additional requests join the existing schedule and respect the selected spacing, even if the previous request contained only one drone.
 - **Near radius / Far radius:** minimum and maximum distance from the gun's origin, from 5–200 scene units. Equal values place drones at one exact distance. Adjusting either limit keeps the range ordered.
-- **Random directions:** distributes the swarm across the hemisphere above the origin. Turn this off to choose **Azimuth (°)** from 0–360° and **Altitude (°)** from 0–90° above the horizon. Zero azimuth is +Z; 90° is +X, matching the gun coordinates.
+- **Random directions:** distributes the swarm across the hemisphere above the origin. Turn this off to choose **Azimuth (°)** from 0–360° and **Elevation (°)** from 0–90° above the horizon. Zero azimuth is +Z; 90° is +X, matching the gun coordinates.
 - **Speed (units/s):** constant flight speed from 0.5–20 scene units per second.
 - **Clear drones:** cancels pending launches, removes current flights and effects, and resets the kill and impact counters.
 
@@ -86,7 +86,7 @@ The third parameter, `radarData`, is a fresh array of **live targets only**:
 [{ id: 1, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]
 ```
 
-`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed intersection of the gun's azimuth and altitude axes in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Existing two-parameter controllers continue to work.
+`id` is a stable drone ID, `pos` is a plain object containing the target's world coordinates, and `distance` is the scalar 3D distance from the fixed intersection of the gun's azimuth and elevation axes in scene units (`Math.hypot(pos.x, pos.y, pos.z)`). The array is empty when no drones are in flight. Queued, killed, and impacted drones are omitted. A snapshot is captured when a frame is sent to the worker; slow callbacks receive the latest targets on their next frame. Data is copied into the isolated VM, so modifying the array or its positions in a script does not change live drones. Existing two-parameter controllers continue to work.
 
 The five gun API functions are available directly inside the code, with no imports or `window.phalanx` prefix. Angles are in **radians**. For example:
 
@@ -95,7 +95,7 @@ let nextShot = 0;
 
 function updateGun(elapsedTime, deltaTime, radarData) {
   setAzimuth(elapsedTime * 0.4);
-  setAltitude(Math.PI / 6 + Math.sin(elapsedTime) * 0.1);
+  setElevation(Math.PI / 6 + Math.sin(elapsedTime) * 0.1);
 
   if (elapsedTime >= nextShot) {
     fire();
@@ -148,34 +148,34 @@ Import the five functions from `src/api.js`. For example, from another module in
 ```js
 import {
   setAzimuth,
-  setAltitude,
+  setElevation,
   getCurrentAzimuth,
-  getCurrentAltitude,
+  getCurrentElevation,
   fire,
 } from './api.js';
 
 setAzimuth(Math.PI / 2);
-setAltitude(Math.PI / 6);
+setElevation(Math.PI / 6);
 fire();
 
 // Read these as the scene animates toward the commanded angles.
 const azimuth = getCurrentAzimuth();
-const altitude = getCurrentAltitude();
+const elevation = getCurrentElevation();
 ```
 
-The same functions are available as `window.phalanx.setAzimuth(rad)`, `window.phalanx.setAltitude(rad)`, `window.phalanx.getCurrentAzimuth()`, `window.phalanx.getCurrentAltitude()`, and `window.phalanx.fire()` once the scene initializes.
+The same functions are available as `window.phalanx.setAzimuth(rad)`, `window.phalanx.setElevation(rad)`, `window.phalanx.getCurrentAzimuth()`, `window.phalanx.getCurrentElevation()`, and `window.phalanx.fire()` once the scene initializes.
 
-All angles use **radians**. Azimuth commands wrap around the circle and retain the existing shortest-path smoothing. `getCurrentAzimuth()` returns the current animated bearing in `[0, 2π)`. Altitude means the barrel inclination above horizontal; it is clamped to the existing **−15° to +85°** range (approximately **−0.262 to +1.484 rad**), with an initial inclination of **10°**. The getters return the current animated pose, so they may differ from a newly commanded angle while the mount moves. Setters reject non-finite values and non-number inputs with `TypeError`.
+All angles use **radians**. Azimuth commands wrap around the circle and retain the existing shortest-path smoothing. `getCurrentAzimuth()` returns the current animated bearing in `[0, 2π)`. Elevation means the barrel inclination above horizontal; it is clamped to the existing **−15° to +85°** range (approximately **−0.262 to +1.484 rad**), with an initial inclination of **10°**. The getters return the current animated pose, so they may differ from a newly commanded angle while the mount moves. Setters reject non-finite values and non-number inputs with `TypeError`.
 
 `fire()` starts a **0.7-second burst** using barrel spin, muzzle flash, smoke, and streak effects, with gun hit detection on each emitted streak. Calling it again extends the burst to 0.7 seconds from the latest call. Losing focus or hiding the page cancels firing. Sound remains disabled.
 
 ## Model and rig
 
-The fixed scene origin `(0, 0, 0)` is the **intersection of the azimuth and altitude rotation axes**, marked by a small red/green/blue axis helper. The world uses **Y up**, **+Z forward / zero bearing**, and **+X right / east**. Geometry retains its deck-relative dimensions internally, while the model root, environment, and camera framing are translated down by 2.08 scene units. The mounting surface is now at `y = -2.08`.
+The fixed scene origin `(0, 0, 0)` is the **intersection of the azimuth and elevation rotation axes**, marked by a small red/green/blue axis helper. The world uses **Y up**, **+Z forward / zero bearing**, and **+X right / east**. Geometry retains its deck-relative dimensions internally, while the model root, environment, and camera framing are translated down by 2.08 scene units. The mounting surface is now at `y = -2.08`.
 
-The complete cannon assembly (receiver, magazine, barrel brace, rotor, and muzzle anchor) is raised **0.065 scene units** relative to the elevation cradle, canceling its previous downward offset. Both joint placements and the existing rotation behavior are preserved. The altitude axis still turns with azimuth, and both axes always cross at the fixed origin. The barrel assembly's extended centerline passes through that origin at every azimuth and altitude, including while the rotor spins. The barrel's rear face remains forward of the pivot; its center moves as the gun turns.
+The complete cannon assembly (receiver, magazine, barrel brace, rotor, and muzzle anchor) is raised **0.065 scene units** relative to the elevation cradle, canceling its previous downward offset. Both joint placements and the existing rotation behavior are preserved. The elevation axis still turns with azimuth, and both axes always cross at the fixed origin. The barrel assembly's extended centerline passes through that origin at every azimuth and elevation, including while the rotor spins. The barrel's rear face remains forward of the pivot; its center moves as the gun turns.
 
-Drone spawning, flight destinations, radar positions, and scalar distances all use this same fixed origin. Gun angle conventions are unchanged, so a target's direction from the origin directly yields `Math.atan2(x, z)` for azimuth and `Math.atan2(y, Math.hypot(x, z))` for altitude. The camera is independent of the turret, so dragging the view never changes the gun's azimuth or elevation.
+Drone spawning, flight destinations, radar positions, and scalar distances all use this same fixed origin. Gun angle conventions are unchanged, so a target's direction from the origin directly yields `Math.atan2(x, z)` for azimuth and `Math.atan2(y, Math.hypot(x, z))` for elevation. The camera is independent of the turret, so dragging the view never changes the gun's azimuth or elevation.
 
 The visual hierarchy is:
 

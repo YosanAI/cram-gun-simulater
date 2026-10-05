@@ -57,7 +57,7 @@ export function createSimulationRunner(api, {
   }
 
   function currentPose() {
-    return { azimuth: api.getCurrentAzimuth(), altitude: api.getCurrentAltitude() };
+    return { azimuth: api.getCurrentAzimuth(), elevation: api.getCurrentElevation() };
   }
 
   function receive(instance, message) {
