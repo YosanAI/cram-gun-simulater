@@ -104,11 +104,42 @@ function updateGun(elapsedTime, deltaTime, radarData) {
 }
 ```
 
-Variables outside `updateGun` persist between frames within a run. Syntax errors, missing callbacks, thrown values, and runtime errors appear below the editor, with source line information when available. Errors stop the worker without stopping the scene. `updateGun` must be synchronous. Calling `fire()` on every update keeps extending the burst until the simulation is stopped.
+Variables outside `updateGun` persist between frames within a run. Syntax errors, missing callbacks, thrown values, and runtime errors appear below the editor, with source line information when available. Errors stop the worker without stopping the scene. Calling `fire()` on every update keeps extending the burst until the simulation is stopped.
 
-The VM exposes the five gun functions, the callback's `radarData` parameter, and standard JavaScript built-ins. It cannot access the page, browser storage, networking, timers, worker messaging, or the app's objects. Getters read a snapshot of the current scene angles at the start of each callback. Commands are validated and applied only after a callback succeeds; commands from a failed or stopped callback are discarded.
+The editor provides normal JavaScript built-ins, including **Math**, JSON, Date, arrays, typed arrays, Maps, Sets, classes, helper functions, generators used as helpers, `eval`, and `Function`. **THREE** is the actual installed Three.js 0.180.0 core library, loaded into the VM's own heap. No imports are needed. You can use its vectors, matrices, quaternions, colors, rays, geometry, materials, meshes, local scenes, animation calculations, and other operations that work without browser resources. `performance.now()` is also available for timing calculations and Three.js clocks.
 
-Each script has a **32 MiB guest heap**, a **256 KiB stack**, and a **200 ms execution limit** during compilation and each callback. An independent watchdog terminates an unresponsive worker. Source is limited to **64K characters**, with at most **128 gun commands per callback**. Infinite loops, memory exhaustion, and worker failures are reported in the editor. These limits protect the interactive scene; execution remains entirely local.
+```js
+const position = new THREE.Vector3();
+
+function updateGun(elapsedTime, deltaTime, radarData) {
+  if (!radarData.length) return;
+  const { x, y, z } = radarData[0].pos;
+  position.set(x, y, z);
+  const bearing = Math.atan2(position.x, position.z);
+  setAzimuth(bearing);
+  if (elapsedTime === 0) {
+    console.log("Distance:", position.length(), "Bearing:", THREE.MathUtils.radToDeg(bearing));
+  }
+}
+```
+
+`console.log`, `info`, `warn`, `error`, and `debug` forward text to the **browser developer tools Console**, prefixed with `[updateGun]`. Objects and arrays are JSON snapshots; circular references are marked `[Circular]`. `dir`, `table`, `assert`, `count`/`countReset`, `time`/`timeLog`/`timeEnd`, `trace`, and group methods also work. Tables and groups produce plain text, and `clear`/`groupEnd` are harmless no-ops. Logs emitted before a script error remain visible. Math, THREE, and console methods have editor completion.
+
+Async helpers and `async function updateGun(...)` are supported when their Promises settle through local computations within the callback. The VM drains Promise jobs before applying commands, so commands after `await Promise.resolve(...)` work. Rejections discard the whole command batch. A Promise that never settles or needs an unavailable external operation stops the script with an error. The frame callback itself must be a normal or async function; generator helper functions are allowed.
+
+The remaining access restrictions are:
+
+| Restricted capability | Reason and scope |
+| --- | --- |
+| Page, DOM, navigation, browser storage, cookies, and live app objects | Scripts cannot alter the page, access private browser data, or bypass the gun API. Local THREE scenes and meshes do not modify the displayed scene. |
+| Network and external modules | `fetch`, XMLHttpRequest, WebSocket, arbitrary imports, and script loading have no host bridge. Three.js URL/image loaders therefore cannot fetch assets. Core THREE is preloaded; addons and other npm libraries are not preloaded. |
+| OS, filesystem, workers, and messaging | No Node globals, process execution, file access, Worker, importScripts, or postMessage are exposed. |
+| Browser rendering and devices | There is no DOM canvas, GPU, audio, camera, microphone, or device access. THREE renderers and browser-dependent helpers cannot use those resources. |
+| Timers and work that outlives a callback | Browser timers and animation-frame APIs are unavailable. Use `elapsedTime`/`deltaTime` to schedule controller actions. Local Promise computations are supported. |
+
+These boundaries come from running inside QuickJS rather than deleting a few globals from the browser. Even `eval`, function constructors, and Three.js constructors stay inside that VM. Getters read the current scene angle snapshot; radar positions are copies. Commands are validated and applied only after a callback succeeds, and responses from a stopped worker are ignored.
+
+To stop runaway CPU, memory, and output usage, each script has a **128 MiB guest heap**, a **1 MiB stack**, and a **500 ms execution limit** during compilation and each callback. Trusted library initialization gets up to **5 seconds**; startup has a **10-second watchdog**, and callback responses have a **2-second watchdog**. Source is limited to **256K characters**, with at most **1,024 gun commands** and **1,024 Promise jobs per callback**. Console output allows **64 entries per initialization/callback**, **200 entries per second**, **8,000 characters per entry**, and **32 arguments per call**; excess log entries are dropped without stopping gun commands. Infinite loops, memory exhaustion, unbounded Promise jobs, invalid commands, and worker failures appear as editor errors. Loading the full library increases worker download size and initialization time; it remains bundled locally with no runtime CDN dependency.
 
 ## Scene API
 
@@ -181,6 +212,7 @@ The modeled features include the tall pale radome, tracking enclosure, side opti
 | `src/editor-panel.js` | Pointer/keyboard resizing, collapse/expand behavior, and compass spacing |
 | `src/simulation.js` | Worker lifecycle, frame scheduling, validated API bridge, and watchdogs |
 | `src/gun-sandbox.js` | Isolated QuickJS VM, guest APIs, execution/memory limits, and source errors |
+| `src/sandbox-globals.js` | Guest console, timing, and local AbortController compatibility for Three.js |
 | `src/sandbox.worker.js` / `src/sandbox-worker-host.js` | Worker-side VM initialization and request handling |
 | `src/sandbox-limits.js` | Resource limits, command validation, and bounded error messages |
 | `vite.config.js` | Module-worker bundling and local WebAssembly assets |
@@ -214,4 +246,4 @@ The app contains original procedural geometry and original effects. No external 
 
 ## Verification
 
-Run `npm run check`, `npm test`, and `npm run build` to verify syntax, API behavior, sandbox execution, drone spawning and flight, effect cleanup, and production bundling. Tests use real worker threads and the same QuickJS engine to verify frame timing, stopping, restarts, error lines, discarded commands, infinite-loop interruption, guest memory limits, unavailable host globals, stale responses, validated command batches, and watchdog termination. Drone tests cover hemisphere/radius bounds, fixed bearings, nose orientation, constant speed, launch and impact intervals, long/short frame consistency, appended queues, queue cancellation, whole-swarm rejection, large effect layers, pool limits, and disposal. Interactive browser QA requires a browser with WebGL 2 and hardware acceleration.
+Run `npm run check`, `npm test`, and `npm run build` to verify syntax, API behavior, sandbox execution, drone spawning and flight, effect cleanup, and production bundling. Tests use real worker threads, QuickJS, and the installed Three.js source to verify vectors, geometry, scene objects, Math, console output, async calculations, frame timing, restarts, errors, discarded commands, CPU/memory/Promise/output limits, constructor isolation, stale responses, validated command batches, and watchdog termination. Drone tests cover hemisphere/radius bounds, fixed bearings, nose orientation, constant speed, launch and impact intervals, long/short frame consistency, appended queues, queue cancellation, whole-swarm rejection, large effect layers, pool limits, and disposal. Interactive browser QA requires a browser with WebGL 2 and hardware acceleration.

@@ -3,6 +3,8 @@ import { javascript, javascriptLanguage, scopeCompletionSource } from '@codemirr
 import { oneDark } from '@codemirror/theme-one-dark';
 import { DEFAULT_CODE, createSimulationRunner } from './simulation.js';
 import { createEditorPanel } from './editor-panel.js';
+import * as THREE from 'three';
+import { CONSOLE_METHODS } from './sandbox-limits.js';
 
 export function createCodeEditor({ api, onStop }) {
   const panel = document.getElementById('script-panel');
@@ -39,7 +41,9 @@ export function createCodeEditor({ api, onStop }) {
       basicSetup,
       javascript(),
       oneDark,
-      javascriptLanguage.data.of({ autocomplete: scopeCompletionSource(api) }),
+      javascriptLanguage.data.of({ autocomplete: scopeCompletionSource({
+        ...api, Math, THREE, console: Object.fromEntries(CONSOLE_METHODS.map(name => [name, () => {}])),
+      }) }),
       EditorView.contentAttributes.of({ 'aria-label': 'JavaScript gun control code', spellcheck: 'false' }),
       EditorView.theme({
         '&': { height: '100%', fontSize: '13px', backgroundColor: '#0d1720' },

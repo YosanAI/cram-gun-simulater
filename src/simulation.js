@@ -1,4 +1,4 @@
-import { SANDBOX_LIMITS, validateCommands, serializeSandboxError } from './sandbox-limits.js';
+import { SANDBOX_LIMITS, validateCommands, validateConsoleEntries, serializeSandboxError } from './sandbox-limits.js';
 
 export const DEFAULT_CODE = 'function updateGun(elapsedTime, deltaTime, radarData) {\n\n}\n';
 
@@ -9,6 +9,7 @@ export function createSimulationRunner(api, {
   onStateChange = () => {},
   onError = () => {},
   onStop = () => {},
+  onLog = entry => console[entry.level]('[updateGun]', entry.message),
   createWorker = defaultWorker,
   startupTimeoutMs = SANDBOX_LIMITS.startupMs,
   responseTimeoutMs = SANDBOX_LIMITS.responseMs,
@@ -21,6 +22,8 @@ export function createSimulationRunner(api, {
   let elapsedTime = 0;
   let pendingDelta = 0;
   let sentDelta = 0;
+  let consoleWindow = 0;
+  let consoleCount = 0;
 
   function stop() {
     clearTimeout(watchdog);
@@ -60,6 +63,14 @@ export function createSimulationRunner(api, {
   function receive(instance, message) {
     if (worker !== instance) return;
     try {
+      validateConsoleEntries(message?.logs);
+      const now = Date.now();
+      if (now - consoleWindow >= 1000) { consoleWindow = now; consoleCount = 0; }
+      for (const entry of message?.logs || []) {
+        if (consoleCount >= SANDBOX_LIMITS.consoleEntriesPerSecond) break;
+        consoleCount++;
+        onLog(entry);
+      }
       if (message?.type === 'error') {
         const detail = serializeSandboxError(message.error);
         const error = new Error(detail.message);
@@ -92,9 +103,11 @@ export function createSimulationRunner(api, {
       stop();
       elapsedTime = 0;
       nextId = 0;
+      consoleWindow = Date.now();
+      consoleCount = 0;
       try {
         if (typeof source !== 'string' || source.length > SANDBOX_LIMITS.sourceLength) {
-          throw new RangeError('Script must be at most 64K characters.');
+          throw new RangeError('Script must be at most ' + SANDBOX_LIMITS.sourceLength / 1024 + 'K characters.');
         }
         const instance = createWorker();
         worker = instance;

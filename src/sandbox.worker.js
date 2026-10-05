@@ -2,7 +2,8 @@ import { newQuickJSWASMModuleFromVariant, newVariant } from 'quickjs-emscripten-
 import RELEASE_SYNC from '@jitl/quickjs-wasmfile-release-sync';
 import wasmUrl from '@jitl/quickjs-wasmfile-release-sync/wasm?url';
 import { createSandboxWorkerHost } from './sandbox-worker-host.js';
+import threeSource from '../node_modules/three/build/three.cjs?raw';
 
 const loadQuickJS = () => newQuickJSWASMModuleFromVariant(newVariant(RELEASE_SYNC, { wasmLocation: wasmUrl }));
-const receive = createSandboxWorkerHost(loadQuickJS, message => self.postMessage(message));
+const receive = createSandboxWorkerHost(loadQuickJS, message => self.postMessage(message), { threeSource });
 self.onmessage = event => { void receive(event.data); };

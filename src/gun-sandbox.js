@@ -1,9 +1,10 @@
 import { SANDBOX_LIMITS } from './sandbox-limits.js';
+import { sandboxGlobalsSource } from './sandbox-globals.js';
 
 /** User JavaScript runs in its own QuickJS heap, never in the host JS realm. */
-export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_LIMITS) {
+export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_LIMITS, { threeSource, onLog = () => {} } = {}) {
   if (typeof source !== 'string' || source.length > limits.sourceLength) {
-    throw new RangeError('Script must be at most 64K characters.');
+    throw new RangeError('Script must be at most ' + limits.sourceLength / 1024 + 'K characters.');
   }
   const runtime = QuickJS.newRuntime();
   runtime.setMemoryLimit(limits.memoryBytes);
@@ -14,6 +15,7 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
   let commands = [];
   let pose = initialPose;
   let inFrame = false;
+  let logCount = 0;
   let callback;
   let invoke;
   let disposed = false;
@@ -42,16 +44,16 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
     throw error;
   }
 
-  function bounded(operation) {
+  function bounded(operation, milliseconds = limits.executionMs) {
     interrupted = false;
-    deadline = Date.now() + limits.executionMs;
+    deadline = Date.now() + milliseconds;
     try {
       const result = operation();
       if (interrupted) throw new Error('Execution interrupted.');
       return result;
     } catch (error) {
       if (interrupted) {
-        const timeout = new Error('Script exceeded the ' + limits.executionMs + ' ms execution limit.');
+        const timeout = new Error('Script exceeded the ' + milliseconds + ' ms execution limit.');
         timeout.name = 'TimeoutError';
         throw timeout;
       }
@@ -64,6 +66,14 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
   function addFunction(name, implementation) {
     const handle = vm.newFunction(name, implementation);
     try { vm.setProp(vm.global, name, handle); } finally { handle.dispose(); }
+  }
+
+  function drainJobs() {
+    let jobs = 0;
+    while (runtime.hasPendingJob()) {
+      if (++jobs > limits.promiseJobs) throw new RangeError('Too many Promise jobs in one callback.');
+      unwrap(runtime.executePendingJobs(1));
+    }
   }
 
   function queue(name, value) {
@@ -99,14 +109,30 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
     addFunction('getCurrentAzimuth', () => vm.newNumber(pose.azimuth));
     addFunction('getCurrentAltitude', () => vm.newNumber(pose.altitude));
 
+    addFunction('__reserveConsoleEntry', () => logCount++ < limits.consoleEntries ? vm.true : vm.false);
+    addFunction('__writeConsoleEntry', (level, message) => {
+      onLog({ level: vm.getString(level), message: vm.getString(message).slice(0, limits.consoleCharacters) });
+    });
+    addFunction('__sandboxNow', () => vm.newNumber(globalThis.performance?.now() ?? Date.now()));
+    bounded(() => unwrap(vm.evalCode(sandboxGlobalsSource(limits), 'sandbox-globals.js')).dispose());
+
+    if (threeSource) {
+      // Load the installed library into the guest heap, with no host THREE objects.
+      bounded(() => unwrap(vm.evalCode(
+        'globalThis.THREE = (function (exports) {\n' + threeSource + '\n;return exports; })({});',
+        'three.cjs',
+      )).dispose(), limits.libraryMs);
+    }
+
     // Capture intrinsics before user code can modify its own globals.
     invoke = bounded(() => unwrap(vm.evalCode(
-      '(function () { const apply = Reflect.apply; const tag = Object.prototype.toString; const Fail = TypeError; const parse = JSON.parse;' +
+      '(function () { const apply = Reflect.apply; const tag = Object.prototype.toString; const Fail = TypeError; const parse = JSON.parse; const P = Promise; const resolve = P.resolve;' +
       'return function (fn, time, delta, radarJson, validateOnly) {' +
-      'if (apply(tag, fn, []) !== "[object Function]") throw new Fail("updateGun must be a synchronous function.");' +
+      'const kind = apply(tag, fn, []);' +
+      'if (kind !== "[object Function]" && kind !== "[object AsyncFunction]") throw new Fail("updateGun must be a function, not a generator.");' +
       'if (validateOnly) return;' +
       'const result = apply(fn, undefined, [time, delta, parse(radarJson)]);' +
-      'if (result && typeof result.then === "function") throw new Fail("updateGun must not return a Promise.");' +
+      'return apply(resolve, P, [result]);' +
       '}; })()', 'sandbox-internal.js',
     )));
     callback = bounded(() => unwrap(vm.evalCode(
@@ -116,7 +142,7 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
     )));
     if (vm.typeof(callback) !== 'function') throw new TypeError('Define function updateGun(elapsedTime, deltaTime, radarData).');
     bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, vm.undefined, vm.undefined, vm.undefined, vm.true)).dispose());
-    if (runtime.hasPendingJob()) throw new TypeError('Asynchronous code is not supported in updateGun.');
+    bounded(drainJobs);
   } catch (error) {
     dispose();
     throw error;
@@ -127,6 +153,7 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
       if (disposed) throw new Error('The sandbox has been stopped.');
       pose = currentPose;
       commands = [];
+      logCount = 0;
       inFrame = true;
       const time = vm.newNumber(elapsedTime);
       const delta = vm.newNumber(deltaTime);
@@ -134,8 +161,15 @@ export function createGunSandbox(QuickJS, source, initialPose, limits = SANDBOX_
       try {
         // Parse into the guest heap; no host objects or functions cross the VM boundary.
         radarJson = vm.newString(JSON.stringify(radarData));
-        bounded(() => unwrap(vm.callFunction(invoke, vm.undefined, callback, time, delta, radarJson, vm.false)).dispose());
-        if (runtime.hasPendingJob()) throw new TypeError('Asynchronous code is not supported in updateGun.');
+        bounded(() => {
+          const result = unwrap(vm.callFunction(invoke, vm.undefined, callback, time, delta, radarJson, vm.false));
+          try {
+            drainJobs();
+            const state = vm.getPromiseState(result);
+            if (state.type === 'pending') throw new TypeError('updateGun returned a Promise that did not settle within this callback.');
+            unwrap(state).dispose();
+          } finally { result.dispose(); }
+        });
         return commands;
       } finally {
         inFrame = false;

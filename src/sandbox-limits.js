@@ -1,12 +1,32 @@
 export const SANDBOX_LIMITS = Object.freeze({
-  executionMs: 200,
-  memoryBytes: 32 * 1024 * 1024,
-  stackBytes: 256 * 1024,
-  sourceLength: 64 * 1024,
-  commandsPerFrame: 128,
+  executionMs: 500,
+  libraryMs: 5000,
+  memoryBytes: 128 * 1024 * 1024,
+  stackBytes: 1024 * 1024,
+  sourceLength: 256 * 1024,
+  commandsPerFrame: 1024,
+  consoleEntries: 64,
+  consoleEntriesPerSecond: 200,
+  consoleCharacters: 8000,
+  consoleArguments: 32,
+  promiseJobs: 1024,
   startupMs: 10000,
-  responseMs: 1000,
+  responseMs: 2000,
 });
+
+export const CONSOLE_LEVELS = Object.freeze(['log', 'info', 'warn', 'error', 'debug']);
+export const CONSOLE_METHODS = Object.freeze([
+  ...CONSOLE_LEVELS, 'dir', 'table', 'assert', 'count', 'countReset', 'time', 'timeLog', 'timeEnd',
+  'trace', 'group', 'groupCollapsed', 'groupEnd', 'clear',
+]);
+
+export function validateConsoleEntries(entries = []) {
+  if (!Array.isArray(entries) || entries.length > SANDBOX_LIMITS.consoleEntries || entries.some(entry =>
+    !entry || !CONSOLE_LEVELS.includes(entry.level) || typeof entry.message !== 'string' ||
+    entry.message.length > SANDBOX_LIMITS.consoleCharacters)) {
+    throw new TypeError('Invalid sandbox console output.');
+  }
+}
 
 export function validateCommands(commands) {
   if (!Array.isArray(commands) || commands.length > SANDBOX_LIMITS.commandsPerFrame) {

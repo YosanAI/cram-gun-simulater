@@ -18,6 +18,7 @@ const waitFor = async predicate => {
 function createHarness(t, { api: suppliedApi, ...overrides } = {}) {
   const calls = [];
   const errors = [];
+  const logs = [];
   const phases = [];
   const workers = [];
   const api = suppliedApi || {
@@ -42,6 +43,7 @@ function createHarness(t, { api: suppliedApi, ...overrides } = {}) {
     createWorker,
     onStateChange: (_, phase) => phases.push(phase),
     onError: error => errors.push(error),
+    onLog: entry => logs.push(entry),
     ...overrides,
   });
   t.after(async () => {
@@ -49,7 +51,7 @@ function createHarness(t, { api: suppliedApi, ...overrides } = {}) {
     await Promise.all(workers.map(worker => worker.terminate()));
   });
   return {
-    runner, calls, errors, phases,
+    runner, calls, errors, logs, phases,
     async run(source) {
       const startingErrors = errors.length;
       runner.run(source);
@@ -148,11 +150,10 @@ test('syntax errors are reported and corrected scripts can restart', async t => 
   assert.deepEqual(h.calls, [['fire']]);
 });
 
-test('missing, non-function, async, and generator callbacks are rejected', async t => {
+test('missing, non-function, and generator frame callbacks are rejected', async t => {
   const h = createHarness(t);
   for (const source of [
     'const unrelated = 1;', 'const updateGun = 42;',
-    'async function updateGun() { fire(); }',
     'function* updateGun() { fire(); }',
   ]) {
     assert.equal(await h.run(source), false);
@@ -224,11 +225,12 @@ test('the VM cannot access browser or Node globals, even through function constr
   assert.equal({}.sandboxPollution, undefined);
 });
 
-test('excessive commands and asynchronous return values stop the sandbox', async t => {
+test('excessive commands, rejected promises, and promises that never settle stop the sandbox', async t => {
   const h = createHarness(t);
   for (const [body, expected] of [
-    ['for (let i=0;i<200;i++) fire();', /Too many gun commands/],
-    ['return Promise.reject(new Error("async fault"));', /must not return a Promise/],
+    ['for (let i=0;i<' + (SANDBOX_LIMITS.commandsPerFrame + 1) + ';i++) fire();', /Too many gun commands/],
+    ['return Promise.reject(new Error("async fault"));', /async fault/],
+    ['return new Promise(() => {});', /did not settle/],
   ]) {
     await h.run('function updateGun() { ' + body + ' }');
     await h.step(0.02);
@@ -346,6 +348,149 @@ test('commands from a stopped worker cannot affect a later run', async t => {
   h.runner.tick(0.02);
   h.runner.stop();
   h.runner.run(DEFAULT_CODE);
-  deliverOldMessage({ data: { type: 'frame', id: 1, commands: [['fire']] } });
+  deliverOldMessage({ data: { type: 'frame', id: 1, commands: [['fire']], logs: [{ level: 'log', message: 'stale' }] } });
   assert.deepEqual(h.calls, []);
+  assert.deepEqual(h.logs, []);
+});
+
+test('the installed Three.js library and Math work on radar targets inside the real worker', async t => {
+  const h = createHarness(t);
+  assert.equal(await h.run(`
+    const position = new THREE.Vector3();
+    const scene = new THREE.Scene();
+    const geometry = new THREE.BoxGeometry(2, 2, 2);
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: "red" }));
+    scene.add(mesh);
+    function updateGun(t, dt, radarData) {
+      const { x, y, z } = radarData[0].pos;
+      position.set(x, y, z);
+      mesh.position.copy(position);
+      scene.updateMatrixWorld(true);
+      const ray = new THREE.Ray(new THREE.Vector3(), position.clone().normalize());
+      if (!ray.intersectsSphere(new THREE.Sphere(position, 1.5))) throw new Error("Ray test failed");
+      const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+      const rotated = new THREE.Vector3(0, 0, 1).applyQuaternion(rotation);
+      console.log(THREE.REVISION, position.length(), geometry.attributes.position.count, scene.children.length, rotated.x);
+      setAzimuth(Math.atan2(x, z));
+      setAltitude(Math.atan2(y, Math.hypot(x, z)));
+      fire();
+    }
+  `), true);
+  await h.step(0.02, [{ id: 1, pos: { x: 3, y: 4, z: 12 }, distance: 13 }]);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.logs, [{ level: 'log', message: '180 13 24 1 1' }]);
+  assert.ok(Math.abs(h.calls[0][1] - Math.atan2(3, 12)) < 1e-12);
+  assert.ok(Math.abs(h.calls[1][1] - Math.atan2(4, Math.hypot(3, 12))) < 1e-12);
+  assert.equal(h.calls[2][0], 'fire');
+});
+
+test('ordinary JS helpers, eval, typed arrays, and async computations are available', async t => {
+  const h = createHarness(t);
+  assert.equal(await h.run(`
+    class Controller { async bearing() { return await Promise.resolve(Math.PI / 2); } }
+    function* samples() { yield 1; yield 2; }
+    const data = new Float32Array([...samples()]);
+    const controller = new Controller();
+    async function updateGun() {
+      const values = await Promise.all([controller.bearing(), Promise.resolve(data.reduce((a, b) => a + b, 0))]);
+      setAzimuth(values[0]);
+      setAltitude(eval("Math.PI / 6"));
+      console.log(new Map([["sum", values[1]]]).get("sum"), new Function("return Math.sqrt(9)")());
+      fire();
+    }
+  `), true);
+  await h.step(0.02);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.logs, [{ level: 'log', message: '3 3' }]);
+  assert.deepEqual(h.calls, [['azimuth', Math.PI / 2], ['altitude', Math.PI / 6], ['fire']]);
+});
+
+test('console handles startup output, circular data, and diagnostics before failed commands', async t => {
+  const h = createHarness(t);
+  await h.run(`
+    console.log("starting");
+    function updateGun() {
+      const value = { id: 1 }; value.self = value;
+      console.log(value, undefined, 42n);
+      console.warn("warning");
+      console.error(new Error("diagnostic"));
+      fire();
+      throw new Error("script fault");
+    }
+  `);
+  await h.step(0.02);
+  assert.equal(h.logs[0].message, 'starting');
+  assert.equal(h.logs[1].message, '{"id":1,"self":"[Circular]"} undefined 42n');
+  assert.equal(h.logs[2].level, 'warn');
+  assert.match(h.logs[3].message, /Error: diagnostic/);
+  assert.deepEqual(h.calls, []);
+  assert.equal(h.errors[0].message, 'script fault');
+});
+
+test('console floods are bounded and the quota resets each frame without stopping commands', async t => {
+  const h = createHarness(t);
+  await h.run('function updateGun() { for (let i=0;i<100;i++) console.log("x".repeat(20000)); fire(); }');
+  await h.step(0.02);
+  assert.equal(h.logs.length, SANDBOX_LIMITS.consoleEntries);
+  assert.ok(h.logs.every(entry => entry.message.length === SANDBOX_LIMITS.consoleCharacters));
+  await h.step(0.02);
+  assert.equal(h.logs.length, SANDBOX_LIMITS.consoleEntries * 2);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.calls, [['fire'], ['fire']]);
+});
+
+test('Three, console, and Math constructors cannot escape the VM or mutate host prototypes', async t => {
+  const h = createHarness(t);
+  await h.run(`
+    function updateGun() {
+      for (const fn of [THREE.Vector3, console.log, Math.sin]) {
+        const root = fn.constructor("return globalThis")();
+        for (const key of ["window", "document", "fetch", "WebSocket", "localStorage", "process", "require", "postMessage", "Worker", "importScripts"]) {
+          if (typeof root[key] !== "undefined") throw new Error("Escaped via " + key);
+        }
+      }
+      THREE.Vector3.prototype.guestOnly = true;
+      Object.prototype.guestOnly = true;
+      fire();
+    }
+  `);
+  await h.step(0.02);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.calls, [['fire']]);
+  const THREE = await import('three');
+  assert.equal(THREE.Vector3.prototype.guestOnly, undefined);
+  assert.equal({}.guestOnly, undefined);
+});
+
+test('an endless Promise job chain is stopped without applying commands', async t => {
+  const h = createHarness(t);
+  await h.run('function updateGun() { fire(); function loop() { Promise.resolve().then(loop); } loop(); }');
+  await h.step(0.02);
+  assert.match(h.errors[0].message, /Promise jobs|execution limit/);
+  assert.deepEqual(h.calls, []);
+});
+
+test('untrusted console messages cannot select arbitrary host functions', t => {
+  let instance;
+  const h = createHarness(t, { createWorker: () => (instance = { postMessage() {}, terminate() {} }) });
+  h.runner.run(DEFAULT_CODE);
+  instance.onmessage({ data: { type: 'ready', logs: [{ level: 'constructor', message: 'bad' }] } });
+  assert.equal(h.runner.isRunning(), false);
+  assert.deepEqual(h.logs, []);
+  assert.match(h.errors[0].message, /Invalid sandbox console/);
+});
+
+test('rapid console output is limited across frames while the gun keeps running', t => {
+  let instance;
+  const h = createHarness(t, { createWorker: () => (instance = { postMessage() {}, terminate() {} }) });
+  h.runner.run(DEFAULT_CODE);
+  instance.onmessage({ data: { type: 'ready' } });
+  const logs = Array.from({ length: SANDBOX_LIMITS.consoleEntries }, () => ({ level: 'log', message: 'test' }));
+  for (let id = 1; id <= 4; id++) {
+    h.runner.tick(0.01);
+    instance.onmessage({ data: { type: 'frame', id, commands: [['fire']], logs } });
+  }
+  assert.equal(h.logs.length, SANDBOX_LIMITS.consoleEntriesPerSecond);
+  assert.equal(h.calls.length, 4);
+  assert.equal(h.runner.isRunning(), true);
 });
